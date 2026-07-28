@@ -71,7 +71,7 @@ end
 local WindUI
 do
     local src=SafeHttpGet(
-        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
+        "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
     )
     if src then
         local ok,res=pcall(function()
@@ -2376,56 +2376,65 @@ end
 WindUI:AddTheme({
     Name = "MacOS Dark",
 
-    Accent = Color3.fromHex("#18181b"),
-    Background = Color3.fromHex("#101010"),
-    BackgroundTransparency = 0.05,
-    Outline = Color3.fromHex("#2a2a2e"),
+    Accent                      = Color3.fromHex("#18181b"),
+    Background                  = Color3.fromHex("#101010"),
+    BackgroundTransparency      = 0.05,
+    Outline                     = Color3.fromHex("#2a2a2e"),
 
-    Text = Color3.fromHex("#ffffff"),
-    Placeholder = Color3.fromHex("#7a7a7a"),
+    Text                        = Color3.fromHex("#ffffff"),
+    Placeholder                 = Color3.fromHex("#7a7a7a"),
 
-    Button = Color3.fromHex("#2c2c30"),
-    Icon = Color3.fromHex("#a1a1aa"),
-    Hover = Color3.fromHex("#ffffff"),
+    Button                      = Color3.fromHex("#2c2c30"),
+    Icon                        = Color3.fromHex("#a1a1aa"),
+    Hover                       = Color3.fromHex("#ffffff"),
 
-    WindowBackground = Color3.fromHex("#101010"),
-    WindowShadow = Color3.fromHex("#000000"),
+    WindowBackground            = Color3.fromHex("#101010"),
+    WindowShadow                = Color3.fromHex("#000000"),
 
-    DialogBackground = Color3.fromHex("#111111"),
+    DialogBackground            = Color3.fromHex("#111111"),
     DialogBackgroundTransparency = 0,
-    DialogTitle = Color3.fromHex("#ffffff"),
-    DialogContent = Color3.fromHex("#a1a1aa"),
-    DialogIcon = Color3.fromHex("#a1a1aa"),
+    DialogTitle                 = Color3.fromHex("#ffffff"),
+    DialogContent               = Color3.fromHex("#a1a1aa"),
+    DialogIcon                  = Color3.fromHex("#a1a1aa"),
 
-    WindowTopbarTitle = Color3.fromHex("#ffffff"),
-    WindowTopbarAuthor = Color3.fromHex("#a1a1aa"),
-    WindowTopbarIcon = Color3.fromHex("#ffffff"),
-    WindowTopbarButtonIcon = Color3.fromHex("#a1a1aa"),
+    WindowTopbarTitle           = Color3.fromHex("#ffffff"),
+    WindowTopbarAuthor          = Color3.fromHex("#a1a1aa"),
+    WindowTopbarIcon            = Color3.fromHex("#ffffff"),
+    WindowTopbarButtonIcon      = Color3.fromHex("#a1a1aa"),
 
-    TabBackground = Color3.fromHex("#18181b"),
-    TabTitle = Color3.fromHex("#ffffff"),
-    TabIcon = Color3.fromHex("#a1a1aa"),
+    TabBackground               = Color3.fromHex("#18181b"),
+    TabTitle                    = Color3.fromHex("#ffffff"),
+    TabIcon                     = Color3.fromHex("#a1a1aa"),
 
-    ElementBackground = Color3.fromHex("#1c1c1f"),
-    ElementTitle = Color3.fromHex("#ffffff"),
-    ElementDesc = Color3.fromHex("#a1a1aa"),
-    ElementIcon = Color3.fromHex("#a1a1aa"),
+    ElementBackground           = Color3.fromHex("#1c1c1f"),
+    ElementTitle                = Color3.fromHex("#ffffff"),
+    ElementDesc                 = Color3.fromHex("#a1a1aa"),
+    ElementIcon                 = Color3.fromHex("#a1a1aa"),
 
-    PopupBackground = Color3.fromHex("#101010"),
+    PopupBackground             = Color3.fromHex("#101010"),
     PopupBackgroundTransparency = 0,
-    PopupTitle = Color3.fromHex("#ffffff"),
-    PopupContent = Color3.fromHex("#a1a1aa"),
-    PopupIcon = Color3.fromHex("#a1a1aa"),
+    PopupTitle                  = Color3.fromHex("#ffffff"),
+    PopupContent                = Color3.fromHex("#a1a1aa"),
+    PopupIcon                   = Color3.fromHex("#a1a1aa"),
 
-    Toggle = Color3.fromHex("#2c2c30"),
-    ToggleBar = Color3.fromHex("#ffffff"),
+    Toggle                      = Color3.fromHex("#2c2c30"),
+    ToggleBar                   = Color3.fromHex("#ffffff"),
 
-    Checkbox = Color3.fromHex("#2c2c30"),
-    CheckboxIcon = Color3.fromHex("#ffffff"),
+    Checkbox                    = Color3.fromHex("#2c2c30"),
+    CheckboxIcon                = Color3.fromHex("#ffffff"),
 
-    Slider = Color3.fromHex("#2c2c30"),
-    SliderThumb = Color3.fromHex("#ffffff"),
+    Slider                      = Color3.fromHex("#2c2c30"),
+    SliderThumb                 = Color3.fromHex("#ffffff"),
 })
+
+-- Gradient (dipanggil di luar AddTheme — dari message.txt)
+pcall(function()
+    WindUI:Gradient({
+        ["0"]   = { Color = Color3.fromHex("#1f1f23"), Transparency = 0 },
+        ["100"] = { Color = Color3.fromHex("#18181b"), Transparency = 0 },
+    }, { Rotation = 0 })
+end)
+
 WindUI:SetTheme("MacOS Dark")
 -- 1. Definisikan fungsi gradient terlebih dahulu agar bisa dipakai di Popup
 local function gradient(text,startColor,endColor,timeOffset)
@@ -2459,47 +2468,84 @@ end
 -- =========================================================
 local TabProfile
 local Window = WindUI:CreateWindow({
-    Title = "RYEENZY | HUB",
-    Icon = "atom",
-    Author = "by Ryeenzydevs",
-    Folder = "Rynzz",
+    Title  = "RYEENZY DEVS",
+    Icon   = "atom",
+    Author = "by rynzdevs",
+    Folder = "RYEENZY DEVS",
 
-    Size = UDim2.fromOffset(580, 460),
-    MinSize = v2(560, 350),
-    MaxSize = v2(850, 560),
-    Resizable = true,
+    Size                     = UDim2.fromOffset(580, 460),
+    MinSize                  = v2(560, 350),
+    MaxSize                  = v2(850, 560),
+    Resizable                = true,
 
-    Transparent = true,
-    Theme = "MacOS Dark",
-    NewElements = true,
-    ElementsRadius = 10,
-    SideBarWidth = 170,
-    TopBarButtonIconSize = 18,
-    HideSearchBar = true,
-    IgnoreAlerts = true,
-    ScrollBarEnabled = false,
+    Transparent              = true,
+    Theme                    = "MacOS Dark",
+    SideBarWidth             = 200,
+    BackgroundImageTransparency = 0.42,
+    HideSearchBar            = false,
+    ScrollBarEnabled         = false,
 
-    ToggleKey = Enum.KeyCode.K,
+    ToggleKey                = Enum.KeyCode.K,
 
-    OpenButton = {
-        Title = "RYEENZY | HUB",
-        Icon = "atom",
-        Enabled = true,
-        Draggable = true,
-        OnlyMobile = false,
-        CornerRadius = UDim.new(0, 14),
-        StrokeThickness = 3,
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromHex("#2C2C2E")),
-            ColorSequenceKeypoint.new(1, Color3.fromHex("#45454a"))
-        })
+    Background               = "rbxassetid://74044845995165",
+
+    User = {
+        Enabled   = true,
+        Anonymous = false,
+        Callback  = function()
+            print("clicked")
+        end,
     },
 
     Topbar = {
-        Height = 44,
+        Height      = 44,
         ButtonsType = "Default",
     },
 })
+
+-- EditOpenButton + tilt animation (dari message.txt)
+local TweenService = game:GetService("TweenService")
+local OpenBtn
+pcall(function()
+    OpenBtn = Window:EditOpenButton({
+        Title           = "RyeenzyDevs",
+        Icon            = "file-terminal",
+        CornerRadius    = UDim.new(0, 14),
+        StrokeThickness = 3,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromHex("#2C2C2E")),
+            ColorSequenceKeypoint.new(1, Color3.fromHex("#45454a")),
+        }),
+        OnlyMobile = false,
+        Enabled    = true,
+        Draggable  = true,
+    })
+end)
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            if OpenBtn then
+                TweenService:Create(
+                    OpenBtn,
+                    TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { Rotation = 8 }
+                ):Play()
+            end
+        end)
+        task.wait(6)
+        pcall(function()
+            if OpenBtn then
+                TweenService:Create(
+                    OpenBtn,
+                    TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { Rotation = -8 }
+                ):Play()
+            end
+        end)
+        task.wait(6)
+    end
+end)
 
 print("[RYEENZY | HUB] Loaded")
 -- FPS TAG
@@ -2512,9 +2558,9 @@ local function createFPSTag(fps)
 end
 createFPSTag(0)
 RunService.RenderStepped:Connect(function()
-    _frames += 1
+    _frames = _frames + 1
     if os.clock() - _lastTime >= 1 then
-        createFPSTag(_frames) _frames = 0 _lastTime = os.clock()
+        createFPSTag(_frames); _frames = 0; _lastTime = os.clock()
     end
 end)
 Window:Tag({ Title = "v1.0.0", Icon = "tag", Color = Color3.fromHex("#262727"), Radius = 8 })
@@ -2522,6 +2568,45 @@ Window:Divider()
 ----------------------------------------------------------------
 -- TABS SETUP (SECTIONED & ORGANIZED)
 ----------------------------------------------------------------
+-- HOME TAB (dari message.txt)
+local HomeTab = Window:Tab({
+    Title  = "Home",
+    Icon   = "house",
+    Locked = false,
+})
+
+HomeTab:Button({
+    Title     = "Copy Discord Link",
+    Color     = Color3.fromHex("#5865F2"),
+    Justify   = "Center",
+    IconAlign = "Left",
+    Icon      = "link",
+    Callback  = function()
+        pcall(function() setclipboard("https://discord.gg/ubCac4ucV") end)
+        pcall(function() clipboard.set("https://discord.gg/ubCac4ucV") end)
+        WindUI:Notify({
+            Title    = "Copied!",
+            Content  = "Discord invite copied to clipboard",
+            Duration = 3,
+            Icon     = "check",
+        })
+    end,
+})
+
+local HomeParagraph = HomeTab:Paragraph({
+    Title         = "about Script",
+    Desc          = "Welcome to Ryeenzydevs, a powerful freemium Script with Premium features. This is Keyless and never will have Key go down to check more contact forms",
+    Color         = Color3.fromHex("#262424"),
+    Image         = "",
+    ImageSize     = 80,
+    Thumbnail     = "",
+    ThumbnailSize = 80,
+    Locked        = false,
+})
+pcall(function() HomeParagraph:SetImage("rbxassetid://74044845995165") end)
+
+Window:Divider()
+
 TabProfile  = Window:Tab({ Title = "Profile", ShowTabTitle = true, Icon = "lucide:user" })
 local kito        = Window:Tab({ Title = "Extras", ShowTabTitle = true, Icon = "lucide:star" })
 Window:Divider()
@@ -4252,7 +4337,7 @@ oldNamecall=
                 }) do
 
                     if n:find(w) then
-                        score+=2
+                        score = score + 2
                     end
                 end
 
@@ -4791,8 +4876,7 @@ local function TriggerParryDagger()
                         getgenv().AimStrictness
                         or 1.3
 
-                    predictPos+=
-                        vel*(ping+(strict*0.045))
+                    predictPos = predictPos + vel*(ping+(strict*0.045))
                 end
 
                 local dist=
@@ -5400,7 +5484,7 @@ t_insert(
         ------------------------------------------------
         
         if isKillerRunning then
-            dynamicDist += 2
+            dynamicDist = dynamicDist + 2
         end
         
         ------------------------------------------------
@@ -5431,7 +5515,7 @@ t_insert(
             end
         end
         
-        dynamicDist += killerProfileBonus
+        dynamicDist = dynamicDist + killerProfileBonus
         
         ------------------------------------------------
         -- AUTO PARRY TRIGGER
