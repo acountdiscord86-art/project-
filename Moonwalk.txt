@@ -71,7 +71,7 @@ end
 local WindUI
 do
     local src=SafeHttpGet(
-        "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+        "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"
     )
     if src then
         local ok,res=pcall(function()
@@ -2376,65 +2376,56 @@ end
 WindUI:AddTheme({
     Name = "MacOS Dark",
 
-    Accent                      = Color3.fromHex("#18181b"),
-    Background                  = Color3.fromHex("#101010"),
-    BackgroundTransparency      = 0.05,
-    Outline                     = Color3.fromHex("#2a2a2e"),
+    Accent = Color3.fromHex("#18181b"),
+    Background = Color3.fromHex("#101010"),
+    BackgroundTransparency = 0.05,
+    Outline = Color3.fromHex("#2a2a2e"),
 
-    Text                        = Color3.fromHex("#ffffff"),
-    Placeholder                 = Color3.fromHex("#7a7a7a"),
+    Text = Color3.fromHex("#ffffff"),
+    Placeholder = Color3.fromHex("#7a7a7a"),
 
-    Button                      = Color3.fromHex("#2c2c30"),
-    Icon                        = Color3.fromHex("#a1a1aa"),
-    Hover                       = Color3.fromHex("#ffffff"),
+    Button = Color3.fromHex("#2c2c30"),
+    Icon = Color3.fromHex("#a1a1aa"),
+    Hover = Color3.fromHex("#ffffff"),
 
-    WindowBackground            = Color3.fromHex("#101010"),
-    WindowShadow                = Color3.fromHex("#000000"),
+    WindowBackground = Color3.fromHex("#101010"),
+    WindowShadow = Color3.fromHex("#000000"),
 
-    DialogBackground            = Color3.fromHex("#111111"),
+    DialogBackground = Color3.fromHex("#111111"),
     DialogBackgroundTransparency = 0,
-    DialogTitle                 = Color3.fromHex("#ffffff"),
-    DialogContent               = Color3.fromHex("#a1a1aa"),
-    DialogIcon                  = Color3.fromHex("#a1a1aa"),
+    DialogTitle = Color3.fromHex("#ffffff"),
+    DialogContent = Color3.fromHex("#a1a1aa"),
+    DialogIcon = Color3.fromHex("#a1a1aa"),
 
-    WindowTopbarTitle           = Color3.fromHex("#ffffff"),
-    WindowTopbarAuthor          = Color3.fromHex("#a1a1aa"),
-    WindowTopbarIcon            = Color3.fromHex("#ffffff"),
-    WindowTopbarButtonIcon      = Color3.fromHex("#a1a1aa"),
+    WindowTopbarTitle = Color3.fromHex("#ffffff"),
+    WindowTopbarAuthor = Color3.fromHex("#a1a1aa"),
+    WindowTopbarIcon = Color3.fromHex("#ffffff"),
+    WindowTopbarButtonIcon = Color3.fromHex("#a1a1aa"),
 
-    TabBackground               = Color3.fromHex("#18181b"),
-    TabTitle                    = Color3.fromHex("#ffffff"),
-    TabIcon                     = Color3.fromHex("#a1a1aa"),
+    TabBackground = Color3.fromHex("#18181b"),
+    TabTitle = Color3.fromHex("#ffffff"),
+    TabIcon = Color3.fromHex("#a1a1aa"),
 
-    ElementBackground           = Color3.fromHex("#1c1c1f"),
-    ElementTitle                = Color3.fromHex("#ffffff"),
-    ElementDesc                 = Color3.fromHex("#a1a1aa"),
-    ElementIcon                 = Color3.fromHex("#a1a1aa"),
+    ElementBackground = Color3.fromHex("#1c1c1f"),
+    ElementTitle = Color3.fromHex("#ffffff"),
+    ElementDesc = Color3.fromHex("#a1a1aa"),
+    ElementIcon = Color3.fromHex("#a1a1aa"),
 
-    PopupBackground             = Color3.fromHex("#101010"),
+    PopupBackground = Color3.fromHex("#101010"),
     PopupBackgroundTransparency = 0,
-    PopupTitle                  = Color3.fromHex("#ffffff"),
-    PopupContent                = Color3.fromHex("#a1a1aa"),
-    PopupIcon                   = Color3.fromHex("#a1a1aa"),
+    PopupTitle = Color3.fromHex("#ffffff"),
+    PopupContent = Color3.fromHex("#a1a1aa"),
+    PopupIcon = Color3.fromHex("#a1a1aa"),
 
-    Toggle                      = Color3.fromHex("#2c2c30"),
-    ToggleBar                   = Color3.fromHex("#ffffff"),
+    Toggle = Color3.fromHex("#2c2c30"),
+    ToggleBar = Color3.fromHex("#ffffff"),
 
-    Checkbox                    = Color3.fromHex("#2c2c30"),
-    CheckboxIcon                = Color3.fromHex("#ffffff"),
+    Checkbox = Color3.fromHex("#2c2c30"),
+    CheckboxIcon = Color3.fromHex("#ffffff"),
 
-    Slider                      = Color3.fromHex("#2c2c30"),
-    SliderThumb                 = Color3.fromHex("#ffffff"),
+    Slider = Color3.fromHex("#2c2c30"),
+    SliderThumb = Color3.fromHex("#ffffff"),
 })
-
--- Gradient (dipanggil di luar AddTheme — dari message.txt)
-pcall(function()
-    WindUI:Gradient({
-        ["0"]   = { Color = Color3.fromHex("#1f1f23"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#18181b"), Transparency = 0 },
-    }, { Rotation = 0 })
-end)
-
 WindUI:SetTheme("MacOS Dark")
 -- 1. Definisikan fungsi gradient terlebih dahulu agar bisa dipakai di Popup
 local function gradient(text,startColor,endColor,timeOffset)
@@ -2468,84 +2459,47 @@ end
 -- =========================================================
 local TabProfile
 local Window = WindUI:CreateWindow({
-    Title  = "RYEENZY DEVS",
-    Icon   = "atom",
-    Author = "by rynzdevs",
-    Folder = "RYEENZY DEVS",
+    Title = "RYEENZY | HUB",
+    Icon = "atom",
+    Author = "by Ryeenzydevs",
+    Folder = "Rynzz",
 
-    Size                     = UDim2.fromOffset(580, 460),
-    MinSize                  = v2(560, 350),
-    MaxSize                  = v2(850, 560),
-    Resizable                = true,
+    Size = UDim2.fromOffset(580, 460),
+    MinSize = v2(560, 350),
+    MaxSize = v2(850, 560),
+    Resizable = true,
 
-    Transparent              = true,
-    Theme                    = "MacOS Dark",
-    SideBarWidth             = 200,
-    BackgroundImageTransparency = 0.42,
-    HideSearchBar            = false,
-    ScrollBarEnabled         = false,
+    Transparent = true,
+    Theme = "MacOS Dark",
+    NewElements = true,
+    ElementsRadius = 10,
+    SideBarWidth = 170,
+    TopBarButtonIconSize = 18,
+    HideSearchBar = true,
+    IgnoreAlerts = true,
+    ScrollBarEnabled = false,
 
-    ToggleKey                = Enum.KeyCode.K,
+    ToggleKey = Enum.KeyCode.K,
 
-    Background               = "rbxassetid://74044845995165",
-
-    User = {
-        Enabled   = true,
-        Anonymous = false,
-        Callback  = function()
-            print("clicked")
-        end,
-    },
-
-    Topbar = {
-        Height      = 44,
-        ButtonsType = "Default",
-    },
-})
-
--- EditOpenButton + tilt animation (dari message.txt)
-local TweenService = game:GetService("TweenService")
-local OpenBtn
-pcall(function()
-    OpenBtn = Window:EditOpenButton({
-        Title           = "RyeenzyDevs",
-        Icon            = "file-terminal",
-        CornerRadius    = UDim.new(0, 14),
+    OpenButton = {
+        Title = "RYEENZY | HUB",
+        Icon = "atom",
+        Enabled = true,
+        Draggable = true,
+        OnlyMobile = false,
+        CornerRadius = UDim.new(0, 14),
         StrokeThickness = 3,
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromHex("#2C2C2E")),
-            ColorSequenceKeypoint.new(1, Color3.fromHex("#45454a")),
-        }),
-        OnlyMobile = false,
-        Enabled    = true,
-        Draggable  = true,
-    })
-end)
+            ColorSequenceKeypoint.new(1, Color3.fromHex("#45454a"))
+        })
+    },
 
-task.spawn(function()
-    while true do
-        pcall(function()
-            if OpenBtn then
-                TweenService:Create(
-                    OpenBtn,
-                    TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                    { Rotation = 8 }
-                ):Play()
-            end
-        end)
-        task.wait(6)
-        pcall(function()
-            if OpenBtn then
-                TweenService:Create(
-                    OpenBtn,
-                    TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                    { Rotation = -8 }
-                ):Play()
-            end
-        end)
-        task.wait(6)
-    end
-end)
+    Topbar = {
+        Height = 44,
+        ButtonsType = "Default",
+    },
+})
 
 print("[RYEENZY | HUB] Loaded")
 -- FPS TAG
@@ -2558,9 +2512,9 @@ local function createFPSTag(fps)
 end
 createFPSTag(0)
 RunService.RenderStepped:Connect(function()
-    _frames = _frames + 1
+    _frames += 1
     if os.clock() - _lastTime >= 1 then
-        createFPSTag(_frames); _frames = 0; _lastTime = os.clock()
+        createFPSTag(_frames) _frames = 0 _lastTime = os.clock()
     end
 end)
 Window:Tag({ Title = "v1.0.0", Icon = "tag", Color = Color3.fromHex("#262727"), Radius = 8 })
@@ -2568,45 +2522,6 @@ Window:Divider()
 ----------------------------------------------------------------
 -- TABS SETUP (SECTIONED & ORGANIZED)
 ----------------------------------------------------------------
--- HOME TAB (dari message.txt)
-local HomeTab = Window:Tab({
-    Title  = "Home",
-    Icon   = "house",
-    Locked = false,
-})
-
-HomeTab:Button({
-    Title     = "Copy Discord Link",
-    Color     = Color3.fromHex("#5865F2"),
-    Justify   = "Center",
-    IconAlign = "Left",
-    Icon      = "link",
-    Callback  = function()
-        pcall(function() setclipboard("https://discord.gg/ubCac4ucV") end)
-        pcall(function() clipboard.set("https://discord.gg/ubCac4ucV") end)
-        WindUI:Notify({
-            Title    = "Copied!",
-            Content  = "Discord invite copied to clipboard",
-            Duration = 3,
-            Icon     = "check",
-        })
-    end,
-})
-
-local HomeParagraph = HomeTab:Paragraph({
-    Title         = "about Script",
-    Desc          = "Welcome to Ryeenzydevs, a powerful freemium Script with Premium features. This is Keyless and never will have Key go down to check more contact forms",
-    Color         = Color3.fromHex("#262424"),
-    Image         = "",
-    ImageSize     = 80,
-    Thumbnail     = "",
-    ThumbnailSize = 80,
-    Locked        = false,
-})
-pcall(function() HomeParagraph:SetImage("rbxassetid://74044845995165") end)
-
-Window:Divider()
-
 TabProfile  = Window:Tab({ Title = "Profile", ShowTabTitle = true, Icon = "lucide:user" })
 local kito        = Window:Tab({ Title = "Extras", ShowTabTitle = true, Icon = "lucide:star" })
 Window:Divider()
@@ -2864,11 +2779,6 @@ DefenseSection:Toggle({
     --Locked = false,
     Locked = false,
     Callback=function(v)
-
-        if v
-         then
-            return
-        end
 
         AutoParry=v
 
@@ -4337,7 +4247,7 @@ oldNamecall=
                 }) do
 
                     if n:find(w) then
-                        score = score + 2
+                        score+=2
                     end
                 end
 
@@ -4672,6 +4582,66 @@ local KillerProfiles={
     Cure={BonusDist=2,Delay=0.03},
 }
 
+----------------------------------------------------------------
+-- KILLER ATTACK ANIMATION IDs
+-- Dipakai untuk deteksi serangan SEBELUM kena
+----------------------------------------------------------------
+local KILLER_ATTACK_ANIMS = {
+    -- VEIL
+    ["122812055447896"] = {type="lungehold", delay=0.04},
+    ["78935059863801"]  = {type="attack",    delay=0.04},
+    -- SLASHER
+    ["110355011987939"] = {type="lungehold", delay=0.05},
+    ["139369275981139"] = {type="attack",    delay=0.05},
+    ["135181748009911"] = {type="kick",      delay=0.05},
+    -- HIDDEN
+    ["113255068724446"] = {type="lungehold", delay=0},
+    ["74968262036854"]  = {type="attack",    delay=0},
+    -- MYERS
+    ["117042998468241"] = {type="lungehold", delay=0.05},
+    ["133963973694098"] = {type="attack",    delay=0.05},
+    -- JEFF
+    ["129784271201071"] = {type="lungehold", delay=0},
+    ["132817836308238"] = {type="attack",    delay=0},
+    -- ABYSSWALKER
+    ["118907603246885"] = {type="lungehold", delay=0.12},
+    ["78432063483146"]  = {type="attack",    delay=0.12},
+    ["80411309607666"]  = {type="slash",     delay=0.12},
+    -- CURE
+    ["135002183282873"] = {type="lungehold", delay=0.03},
+    ["121216847022485"] = {type="attack",    delay=0.03},
+}
+
+-- State per killer (supaya parry tidak spam repeat)
+local KillerAnimState = {} -- [UserId] = {lastAnimId, lastParryTick}
+
+----------------------------------------------------------------
+-- PARRY VIA ParryClient MODULE (metode resmi game)
+----------------------------------------------------------------
+local function TriggerParryClient()
+    pcall(function()
+        local char   = LocalPlayer.Character
+        if not char then return end
+
+        local dagger = char:FindFirstChild("Parrying Dagger")
+        if not dagger then return end
+
+        local script = dagger:FindFirstChild("parrying dagger")
+        if not script then return end
+
+        local v1 = ReplicatedStorage
+        local v2 = require(v1:WaitForChild("Modules"):WaitForChild("Items"):WaitForChild("ParryClient"))
+
+        local v3 = {
+            ["tool"]          = dagger,
+            ["animationId"]   = 127096285501517,
+            ["lockDuration"]  = 0.8,
+        }
+
+        v2.new(v3)
+    end)
+end
+
 local ExactParryRemote
 local LastParryTick=0
 local CFG_BurstAmount=8
@@ -4790,156 +4760,208 @@ end
 -- TRIGGER PARRY
 ----------------------------------------------------------------
 
+----------------------------------------------------------------
+-- ANIMATION-BASED PARRY TRIGGER
+-- Scan semua killer → cek animasi attack/lungehold
+-- Jika aktif & dalam jarak → parry otomatis
+----------------------------------------------------------------
+local function ScanKillerAttackAnim()
+
+    if not AutoParry then return end
+
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+    if not (myRoot and myHum) or myHum.Health <= 0 then return end
+
+    local myDagger = myChar:FindFirstChild("Parrying Dagger")
+    if not myDagger then return end
+
+    local now  = tick()
+    local ping = GetPing()
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+
+        if plr == LocalPlayer then continue end
+
+        local eTeam = plr.Team and plr.Team.Name:lower() or ""
+        if not eTeam:find("killer") then continue end
+
+        local eChar = plr.Character
+        if not eChar then continue end
+
+        local eRoot = eChar:FindFirstChild("HumanoidRootPart")
+        local eHum  = eChar:FindFirstChildOfClass("Humanoid")
+        if not (eRoot and eHum) or eHum.Health <= 0 then continue end
+
+        ------------------------------------------------
+        -- JARAK CHECK (dengan prediksi)
+        ------------------------------------------------
+        local vel        = eRoot.AssemblyLinearVelocity
+        if vel.Magnitude > CFG_MaxVelocity then vel = vel.Unit * CFG_MaxVelocity end
+
+        local predictPos = eRoot.Position
+        if CFG_AimPrediction then
+            local strict = getgenv().AimStrictness or 1.3
+            predictPos   = predictPos + vel * (ping + strict * 0.045)
+        end
+
+        local dist = (predictPos - myRoot.Position).Magnitude
+        local profile = GetKillerProfile(eChar)
+        local maxDist = (tonumber(ParryDistance) or 10)
+                      + (profile.BonusDist or 0)
+                      + (ping * 10)
+
+        if dist > maxDist then continue end
+        if IsKillerUsingSkill(eChar) then continue end
+
+        ------------------------------------------------
+        -- CEK ANIMATOR — ANIMASI ATTACK / LUNGEHOLD
+        ------------------------------------------------
+        local animator = eHum:FindFirstChildOfClass("Animator")
+        if not animator then continue end
+
+        local uid     = plr.UserId
+        local state   = KillerAnimState[uid] or {}
+        local triggered = false
+
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+
+            if not track.Animation then continue end
+
+            -- Ambil ID bersih dari AnimationId
+            local rawId = track.Animation.AnimationId or ""
+            local animId = rawId:match("(%d+)$") or rawId
+
+            local animData = KILLER_ATTACK_ANIMS[animId]
+
+            if animData then
+
+                ----------------------------------------
+                -- ANTI REPEAT — hanya trigger sekali per animasi per killer
+                ----------------------------------------
+                if state.lastAnimId == animId
+                and now - (state.lastParryTick or 0) < 0.8 then
+                    triggered = true
+                    break
+                end
+
+                ----------------------------------------
+                -- DELAY BERDASARKAN TIPE ANIMASI
+                ----------------------------------------
+                local baseDelay = animData.delay or 0
+                local finalDelay = baseDelay
+                                 + (getgenv().ParryDelayOffset or 0)
+
+                state.lastAnimId   = animId
+                state.lastParryTick = now
+                KillerAnimState[uid] = state
+                triggered = true
+
+                task.spawn(function()
+                    if finalDelay > 0 then task.wait(finalDelay) end
+
+                    if not AutoParry then return end
+
+                    ----------------------------------------
+                    -- METODE 1: ParryClient (resmi)
+                    ----------------------------------------
+                    TriggerParryClient()
+
+                    ----------------------------------------
+                    -- METODE 2: Fallback FireServer langsung
+                    ----------------------------------------
+                    local remote = GetParryRemote()
+                    if remote then
+                        for i = 1, CFG_BurstAmount do
+                            if not AutoParry then break end
+                            pcall(function() remote:FireServer() end)
+                            task.wait(0.008)
+                        end
+                    end
+                end)
+
+                break -- sudah dapat animasi, berhenti loop track
+            end
+        end
+
+        if not triggered then
+            -- Reset state jika killer tidak sedang attack
+            if state.lastAnimId then
+                state.lastAnimId = nil
+                KillerAnimState[uid] = state
+            end
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- Fallback: distance parry (dipanggil hanya jika tidak ada dagger)
+----------------------------------------------------------------
 local function TriggerParryDagger()
 
     local now=tick()
-
-    if now-LastParryTick<CFG_ParryCooldown then
-        return
-    end
+    if now-LastParryTick<CFG_ParryCooldown then return end
 
     local remote=GetParryRemote()
-
-    if not remote then
-        return
-    end
+    if not remote then return end
 
     local char=LocalPlayer.Character
     local root=char and char:FindFirstChild("HumanoidRootPart")
     local hum=char and char:FindFirstChildOfClass("Humanoid")
-
-    if not(root and hum)
-    or hum.Health<=0 then
-        return
-    end
-
-    ------------------------------------------------
-    -- TOOL CHECK
-    ------------------------------------------------
+    if not(root and hum) or hum.Health<=0 then return end
 
     local tool=
         char:FindFirstChild("Parrying Dagger")
         or char:FindFirstChildWhichIsA("Tool")
-
-    if not tool then
-        return
-    end
+    if not tool then return end
 
     local ping=GetPing()
     local bestTarget=nil
     local bestDistance=math.huge
 
-    ------------------------------------------------
-    -- FIND KILLER
-    ------------------------------------------------
-
     for _,plr in ipairs(Players:GetPlayers()) do
-
         if plr~=LocalPlayer
         and plr.Team
         and plr.Team.Name:lower():find("killer")
         and plr.Character then
-
             local eChar=plr.Character
             local eRoot=eChar:FindFirstChild("HumanoidRootPart")
             local eHum=eChar:FindFirstChildOfClass("Humanoid")
-
-            if eRoot and eHum
-            and eHum.Health>0 then
-
-                if IsKillerUsingSkill(eChar) then
-                    continue
-                end
-
+            if eRoot and eHum and eHum.Health>0 then
+                if IsKillerUsingSkill(eChar) then continue end
                 local profile=GetKillerProfile(eChar)
-
-                local maxDist=
-                    (tonumber(ParryDistance) or 10)
-                    +(profile.BonusDist or 0)
-                    +(ping*10)
-
-                ------------------------------------------------
-                -- PREDICTION
-                ------------------------------------------------
-
+                local maxDist=(tonumber(ParryDistance) or 10)+(profile.BonusDist or 0)+(ping*10)
                 local predictPos=eRoot.Position
-
                 if CFG_AimPrediction then
-
                     local vel=eRoot.AssemblyLinearVelocity
-
-                    if vel.Magnitude>CFG_MaxVelocity then
-                        vel=vel.Unit*CFG_MaxVelocity
-                    end
-
-                    local strict=
-                        getgenv().AimStrictness
-                        or 1.3
-
-                    predictPos = predictPos + vel*(ping+(strict*0.045))
+                    if vel.Magnitude>CFG_MaxVelocity then vel=vel.Unit*CFG_MaxVelocity end
+                    predictPos+=vel*(ping+((getgenv().AimStrictness or 1.3)*0.045))
                 end
-
-                local dist=
-                    (predictPos-root.Position).Magnitude
-
-                if dist<=maxDist
-                and dist<bestDistance then
-
+                local dist=(predictPos-root.Position).Magnitude
+                if dist<=maxDist and dist<bestDistance then
                     bestDistance=dist
-
-                    bestTarget={
-                        Root=eRoot,
-                        Profile=profile
-                    }
+                    bestTarget={Root=eRoot,Profile=profile}
                 end
             end
         end
     end
 
-    if not bestTarget then
-        return
-    end
-
+    if not bestTarget then return end
     LastParryTick=now
 
-    ------------------------------------------------
-    -- DELAY
-    ------------------------------------------------
-
-    local finalDelay=
-        (bestTarget.Profile.Delay or 0)
-        +(getgenv().ParryDelayOffset or 0)
-
+    local finalDelay=(bestTarget.Profile.Delay or 0)+(getgenv().ParryDelayOffset or 0)
     task.spawn(function()
-
-        if finalDelay>0 then
-            task.wait(finalDelay)
-        end
-
-        ------------------------------------------------
-        -- CONTINUOUS BURST
-        ------------------------------------------------
-
-        for i=1,CFG_BurstAmount do
-
-            if not AutoParry then
-                break
+        if finalDelay>0 then task.wait(finalDelay) end
+        TriggerParryClient()
+        local r=GetParryRemote()
+        if r then
+            for i=1,CFG_BurstAmount do
+                if not AutoParry then break end
+                pcall(function() r:FireServer() end)
+                task.wait(0.008)
             end
-
-            if not remote
-            or not remote.Parent then
-                break
-            end
-
-            pcall(function()
-                remote:FireServer()
-            end)
-
-            ------------------------------------------------
-            -- MOBILE + PC SAFE
-            ------------------------------------------------
-
-            task.wait(0.008)
         end
     end)
 end
@@ -5484,7 +5506,7 @@ t_insert(
         ------------------------------------------------
         
         if isKillerRunning then
-            dynamicDist = dynamicDist + 2
+            dynamicDist += 2
         end
         
         ------------------------------------------------
@@ -5515,16 +5537,17 @@ t_insert(
             end
         end
         
-        dynamicDist = dynamicDist + killerProfileBonus
+        dynamicDist += killerProfileBonus
         
         ------------------------------------------------
-        -- AUTO PARRY TRIGGER
+        -- AUTO PARRY TRIGGER (Animation-Based)
+        -- ScanKillerAttackAnim = cek animasi attack killer
+        -- TriggerParryDagger   = fallback jarak kalau dagger tidak tersedia
         ------------------------------------------------
-        
+
         if AutoParry then
-        
             pcall(function()
-                TriggerParryDagger()
+                ScanKillerAttackAnim()
             end)
         end
 
