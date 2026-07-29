@@ -57,7 +57,7 @@ local defaultConfig = {
     customName     = "",
     customSubName  = "",
     anonymous      = false,
-    selectedSound  = "107004225739474",
+    selectedSound  = "9120386436",
     customSounds   = {},
     execPoints     = 0,
     webhookUrl     = "",
@@ -465,7 +465,7 @@ end)
 -- nyentuh/trigger fungsinya sendiri
 ----------------------------------------------------
 local NotifySound = Instance.new("Sound")
-NotifySound.SoundId            = "rbxassetid://" .. (config.selectedSound or "107004225739474")
+NotifySound.SoundId            = "rbxassetid://" .. (config.selectedSound or "9120386436")
 NotifySound.Volume             = 0
 NotifySound.RollOffMaxDistance = 0
 NotifySound.Parent             = SoundService
@@ -782,7 +782,7 @@ TabSettings:Button({
 TabSettings:Section({ Title="Notification Sound" })
 
 local presetSounds = {
-    { name="Samsung",   id="107004225739474" },
+    { name="Samsung",   id="9120386436" },
     { name="Apple Pay", id="138740832528048" },
     { name="Discord",   id="135272730546427" },
     { name="FTF",       id="110872490887215" },
@@ -790,7 +790,7 @@ local presetSounds = {
 }
 
 config.customSounds  = config.customSounds  or {}
-config.selectedSound = config.selectedSound or "107004225739474"
+config.selectedSound = config.selectedSound or "9120386436"
 
 local NotifSoundDropdown
 
@@ -859,8 +859,8 @@ TabSettings:Button({
             if p.id==config.selectedSound then isPreset=true break end
         end
         if not isPreset then
-            config.selectedSound="107004225739474"
-            NotifySound.SoundId="rbxassetid://107004225739474"
+            config.selectedSound="9120386436"
+            NotifySound.SoundId="rbxassetid://9120386436"
         end
         saveConfig(config)
         pcall(function() NotifSoundDropdown:Update({Values=buildNotifDropdownValues()}) end)
@@ -1137,26 +1137,27 @@ local recordIndicator = nil
 local frameCountLabel = nil
 
 -- WindUI Window reference
-local Window = nil
+-- Window reference dikelola oleh template UI
 
-local showNotification
+-- showNotification defined via alias below
 
 -- Settings
-local uiSettings = {
-    theme       = "Dark",
-    accentColor = Color3.fromRGB(200, 150, 255),
-    transparency = 0.02,
-    fontSize    = "Medium",
-    showOutsidePlayStop = false,
-    playHotkey = "P",
-    stopHotkey = "X",
-    minimizeHotkey = "M",
-    fpsBoostActive = false,
-    clickSoundEnabled = true,
-    clickSoundVolume = 0.55,
-}
+-- [uiSettings replaced by template config]
+--     theme       = "Dark",
+--     accentColor = Color3.fromRGB(200, 150, 255),
+--     transparency = 0.02,
+--     fontSize    = "Medium",
+--     showOutsidePlayStop = false,
+--     playHotkey = "P",
+--     stopHotkey = "X",
+--     minimizeHotkey = "M",
+--     fpsBoostActive = false,
+--     clickSoundEnabled = true,
+--     clickSoundVolume = 0.55,
+-- }
 
 -- [UI Settings handled by template config system]
+local manualJsonInputText = ""
 
 -- Alias showNotification -> notify (template style)
 local function showNotification(title, content, duration)
@@ -1183,7 +1184,7 @@ end
     end
 
     if type(data) == "table" then
-        uiSettings.theme = sanitizeThemeName(data.theme or uiSettings.theme)
+        config.theme = sanitizeThemeName(data.theme or config.theme)
         uiSettings.showOutsidePlayStop = data.showOutsidePlayStop == true
         uiSettings.playHotkey = sanitizeHotkeyText(data.playHotkey, uiSettings.playHotkey or "P")
         uiSettings.stopHotkey = sanitizeHotkeyText(data.stopHotkey, uiSettings.stopHotkey or "X")
@@ -1208,14 +1209,14 @@ end
         -- FPS Boost jangan ikut auto hidup dari save lama. Harus dinyalakan manual dari menu setiap inject/login.
         uiSettings.fpsBoostActive = false
     else
-        uiSettings.theme = sanitizeThemeName(uiSettings.theme)
+        config.theme = sanitizeThemeName(config.theme)
         uiSettings.playHotkey = sanitizeHotkeyText(uiSettings.playHotkey, "P")
         uiSettings.stopHotkey = sanitizeHotkeyText(uiSettings.stopHotkey, "X")
         uiSettings.minimizeHotkey = sanitizeHotkeyText(uiSettings.minimizeHotkey, "M")
     end
 
     _G[UI_SETTINGS_STORAGE_NAME] = {
-        theme = uiSettings.theme,
+        theme = config.theme,
         showOutsidePlayStop = uiSettings.showOutsidePlayStop == true,
         playHotkey = sanitizeHotkeyText(uiSettings.playHotkey, "P"),
         stopHotkey = sanitizeHotkeyText(uiSettings.stopHotkey, "X"),
@@ -1229,7 +1230,7 @@ end
 
 local function saveUiSettings(silent)
     local saveData = {
-        theme = sanitizeThemeName(uiSettings.theme),
+        theme = sanitizeThemeName(config.theme),
         showOutsidePlayStop = uiSettings.showOutsidePlayStop == true,
         playHotkey = sanitizeHotkeyText(uiSettings.playHotkey, "P"),
         stopHotkey = sanitizeHotkeyText(uiSettings.stopHotkey, "X"),
@@ -1254,7 +1255,7 @@ local function saveUiSettings(silent)
     end
 end
 
-loadUiSettings()
+-- loadUiSettings() -> diganti config dari template
 
 -- [WindUI helpers handled by template UI system]
 
@@ -6884,7 +6885,8 @@ end -- buildPlaybackTabs()
 ----------------------------------------------------
 -- INIT PLAYBACK ENGINE
 ----------------------------------------------------
-local function initPlaybackEngine()
+startupComplete = true
+initPlaybackEngine()
     deviceId = getDeviceId()
     createTimerDisplay()
 
