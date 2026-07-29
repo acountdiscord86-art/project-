@@ -4698,8 +4698,9 @@ local function EnsureWalkable()
 end
 
 ----------------------------------------------------------------
--- PARRY VIA ParryClient MODULE (metode resmi game)
--- lockDuration = 0 supaya tidak freeze movement
+-- TRIGGER PARRY — persis seperti player pencet tombol sendiri
+-- Berdasarkan SimpleSpy: parry = C Closure (FireServer)
+-- dipanggil dari parrying dagger LocalScript via tool.Activated
 ----------------------------------------------------------------
 local function TriggerParryClient()
     pcall(function()
@@ -4709,39 +4710,60 @@ local function TriggerParryClient()
         local dagger = char:FindFirstChild("Parrying Dagger")
         if not dagger then return end
 
-        -- 1. Play animasi secara natural (bisa sambil jalan)
-        PlayParryAnimation()
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return end
 
-        -- 2. Fire parry remote langsung (paling reliable & cepat)
-        local remote = GetParryRemote()
-        if remote then
-            pcall(function() remote:FireServer() end)
-        end
+        -- Simpan WalkSpeed sekarang sebelum parry
+        local savedSpeed = hum.WalkSpeed
 
-        -- 3. ParryClient module sebagai pelengkap
-        --    lockDuration = 0 → tidak freeze movement
-        local ok, v2 = pcall(function()
-            return require(
-                ReplicatedStorage
-                :WaitForChild("Modules")
-                :WaitForChild("Items")
-                :WaitForChild("ParryClient")
-            )
+        ------------------------------------------------
+        -- METODE 1 (PALING NATURAL):
+        -- firesignal(dagger.Activated) = persis seperti
+        -- player klik/tap tool → script dagger yang
+        -- handle animasi + FireServer sendiri
+        ------------------------------------------------
+        local fired = false
+
+        pcall(function()
+            firesignal(dagger.Activated)
+            fired = true
         end)
 
-        if ok and v2 then
-            local v3 = {
-                ["tool"]         = dagger,
-                ["animationId"]  = 127096285501517,
-                ["lockDuration"] = 0,  -- 0 = tidak lock movement sama sekali
-            }
-            pcall(function() v2.new(v3) end)
+        ------------------------------------------------
+        -- METODE 2 (FALLBACK):
+        -- Jika firesignal tidak tersedia di executor,
+        -- fire remote langsung + play animasi manual
+        ------------------------------------------------
+        if not fired then
+            -- Fire parry remote (sama dengan yang dilakukan script dagger)
+            local remote = GetParryRemote()
+            if remote then
+                pcall(function() remote:FireServer() end)
+            end
+
+            -- Play animasi manual karena firesignal tidak jalan
+            PlayParryAnimation()
         end
 
-        -- 4. Pastikan tidak stuck / freeze
-        task.delay(0.05, EnsureWalkable)
-        task.delay(0.15, EnsureWalkable)
-        task.delay(0.35, EnsureWalkable)
+        ------------------------------------------------
+        -- ANTI FREEZE — restore WalkSpeed setelah parry
+        -- Pastikan lockDuration game tidak freeze movement
+        ------------------------------------------------
+        task.delay(0.05,  function()
+            if hum and hum.Parent then
+                hum.WalkSpeed = math.max(hum.WalkSpeed, savedSpeed)
+            end
+        end)
+        task.delay(0.1, function()
+            if hum and hum.Parent then
+                hum.WalkSpeed = math.max(hum.WalkSpeed, savedSpeed)
+            end
+        end)
+        task.delay(0.3, function()
+            if hum and hum.Parent then
+                hum.WalkSpeed = math.max(hum.WalkSpeed, savedSpeed)
+            end
+        end)
     end)
 end
 
