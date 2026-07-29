@@ -1,11 +1,1079 @@
-HttpGet(
-    "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
-))()
+----------------------------------------------------
+-- WINDUI LOADER
+----------------------------------------------------
+local _version = "1.6.63"
+local WindUI
 
--- ========== SERVICES ==========
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:local recordedFrames         = {}
+do
+    local maxTries = 3
+    for i = 1, maxTries do
+        local ok, result = pcall(function()
+            local src = game:HttpGet(
+                "https://github.com/Footagesus/WindUI/releases/download/"
+                .. _version .. "/main.lua"
+            )
+            if #src < 1000 then error("Incomplete download") end
+            return loadstring(src)()
+        end)
+        if ok and result then WindUI = result break end
+        warn("[RYEENZY] WindUI attempt " .. i .. " failed: " .. tostring(result))
+        if i < maxTries then task.wait(2) end
+    end
+    if not WindUI then error("[RYEENZY] Failed to load WindUI") end
+end
+
+local Players            = game:GetService("Players")
+local RunService         = game:GetService("RunService")
+local StatsService       = game:GetService("Stats")
+local MarketplaceService = game:GetService("MarketplaceService")
+local TeleportService    = game:GetService("TeleportService")
+local UserInputService   = game:GetService("UserInputService")
+local SoundService       = game:GetService("SoundService")
+local HttpService        = game:GetService("HttpService")
+local VirtualUser        = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer
+local isMobile    = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+
+local fileSupported = (
+    type(isfolder)   == "function" and
+    type(isfile)     == "function" and
+    type(makefolder) == "function" and
+    type(readfile)   == "function" and
+    type(writefile)  == "function"
+)
+
+
+local configFolder = "RyeenzyHub"
+local configFile   = configFolder .. "/config.json"
+
+local defaultConfig = {
+    background     = "",
+    logo           = "102502086334580",
+    theme          = "Dark",
+    buttonsType    = "Mac",
+    customPfp      = "",
+    customName     = "",
+    customSubName  = "",
+    anonymous      = false,
+    selectedSound  = "107004225739474",
+    customSounds   = {},
+    execPoints     = 0,
+    webhookUrl     = "",
+    webhookEnabled = false,
+    cooldownTime   = 60,
+}
+
+local function loadConfig()
+    if not fileSupported then
+        local f = {} for k,v in pairs(defaultConfig) do f[k]=v end return f
+    end
+    if not isfolder(configFolder) then makefolder(configFolder) end
+    if isfile(configFile) then
+        local ok, data = pcall(function()
+            return HttpService:JSONDecode(readfile(configFile))
+        end)
+        if ok and data then
+            for k,v in pairs(defaultConfig) do
+                if data[k] == nil then data[k] = v end
+            end
+            return data
+        end
+    end
+    local fresh = {} for k,v in pairs(defaultConfig) do fresh[k]=v end return fresh
+end
+
+local function saveConfig(cfg)
+    if not fileSupported then return end
+    if not isfolder(configFolder) then makefolder(configFolder) end
+    writefile(configFile, HttpService:JSONEncode(cfg))
+end
+
+local config = loadConfig()
+config.execPoints = (config.execPoints or 0) + 1
+saveConfig(config)
+
+
+local WebhookURL     = config.webhookUrl     or ""
+local WebhookEnabled = config.webhookEnabled or false
+local CooldownTime   = config.cooldownTime   or 60
+
+----------------------------------------------------
+-- THEME GRADIENT MAP
+----------------------------------------------------
+local ThemeGradients = {
+    Dark             = { a="#888888", b="#333333", c="#0a0a0a" },
+    Light            = { a="#ffffff", b="#cccccc", c="#aaaaaa" },
+    Rose             = { a="#ff8fa3", b="#ff4d6d", c="#000000" },
+    Plant            = { a="#95d5b2", b="#52b788", c="#000000" },
+    Red              = { a="#ff6b6b", b="#e63946", c="#000000" },
+    Indigo           = { a="#a5b4fc", b="#6366f1", c="#000000" },
+    Sky              = { a="#7dd3fc", b="#38bdf8", c="#000000" },
+    Violet           = { a="#c4b5fd", b="#8b5cf6", c="#000000" },
+    Amber            = { a="#fcd34d", b="#f59e0b", c="#000000" },
+    Emerald          = { a="#6ee7b7", b="#10b981", c="#000000" },
+    Midnight         = { a="#334155", b="#1e293b", c="#0f172a" },
+    Crimson          = { a="#fb7185", b="#e11d48", c="#000000" },
+}
+
+local function getThemeAccent(themeName)
+    local g = ThemeGradients[themeName] or ThemeGradients["Dark"]
+    return Color3.fromHex(g.b)
+end
+
+
+local darkShapeThemes = {
+    Rose=true, Plant=true, Red=true,   Indigo=true,
+    Sky=true,  Violet=true, Amber=true, Emerald=true,
+    Crimson=true,
+}
+
+local function getTabIconColor(themeName)
+    if darkShapeThemes[themeName] then
+        return Color3.fromHex("#0a0a0a") 
+    end
+    return getThemeAccent(themeName)
+end
+
+local function makeThemeGradient(themeName)
+    local g = ThemeGradients[themeName] or ThemeGradients["Dark"]
+    return WindUI:Gradient({
+        [0]   = { Color=Color3.fromHex(g.a), Transparency=0 },
+        [50]  = { Color=Color3.fromHex(g.b), Transparency=0 },
+        [100] = { Color=Color3.fromHex(g.c), Transparency=0 },
+    }, { Rotation=45 })
+end
+
+local function makeOpenButtonColor(themeName)
+    local g = ThemeGradients[themeName] or ThemeGradients["Dark"]
+    return ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   Color3.fromHex(g.a)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromHex(g.b)),
+        ColorSequenceKeypoint.new(1,   Color3.fromHex(g.c)),
+    })
+end
+
+----------------------------------------------------
+-- THEME IMAGE MAP
+----------------------------------------------------
+local ThemeImages = {
+    Dark             = { img="136481007766661" },
+    Amber            = { img="95128033219028"  },
+    Light            = { img="103289004814551" },
+    Rose             = { img="128965390137681" },
+    Red              = { img="128965390137681" },
+    Crimson          = { img="128965390137681" },
+    Sky              = { img="115965625673091" },
+    Midnight         = { img="115965625673091" },
+    Indigo           = { img="100706133773186" },
+    Violet           = { img="100706133773186" },
+    Emerald          = { img="72882008403843"  },
+    Plant            = { img="72882008403843"  },
+}
+
+local function getThemeImgs(themeName)
+    return ThemeImages[themeName] or ThemeImages["Dark"]
+end
+
+----------------------------------------------------
+-- PLAYER INFO HELPERS
+----------------------------------------------------
+local function getExecRole(pts)
+    if pts <= 10  then return "Explorer"   end
+    if pts <= 50  then return "RYEENZY Enjoyer" end
+    return "RYEENZY Lover"
+end
+
+local devList = { "ryeenzyexp" }
+
+local function getPlayerRole()
+    local name = LocalPlayer.Name:lower()
+    for _, dev in ipairs(devList) do
+        if name == dev:lower() then return "⚙ Dev" end
+    end
+    return "★ User"
+end
+
+local function getExecutorName()
+    if type(identifyexecutor) == "function" then
+        local ok, n = pcall(identifyexecutor)
+        if ok and n then return tostring(n) end
+    end
+    if type(getexecutorname) == "function" then
+        local ok, n = pcall(getexecutorname)
+        if ok and n then return tostring(n) end
+    end
+    if syn         then return "Synapse X" end
+    if KRNL_LOADED then return "Krnl"      end
+    return "Unknown"
+end
+
+local function getDeviceType()
+    if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+        return "Handheld"
+    end
+    return "Desktop"
+end
+
+local function color3ToHex(c)
+    return string.format("#%02x%02x%02x",
+        math.clamp(math.floor(c.R*255),0,255),
+        math.clamp(math.floor(c.G*255),0,255),
+        math.clamp(math.floor(c.B*255),0,255)
+    )
+end
+
+local function buildPlayerDesc(anon, themeName)
+    local dot = ' <font color="'..color3ToHex(getThemeAccent(themeName or config.theme))..'">◈</font> '
+    if anon then
+        local a = "<b><i>Anonymous</i></b>"
+        return
+            dot.."Display Name : "..a..
+            "\n"..dot.."Account Age  : "..a..
+            "\n"..dot.."Executor     : "..a..
+            "\n"..dot.."Device       : "..a..
+            "\n"..dot.."Exec Points  : "..a..
+            "\n"..dot.."Role         : "..a
+    end
+    local pts = config.execPoints or 1
+    return
+        dot.."Display Name : <b>"..LocalPlayer.DisplayName.."</b>"..
+        "\n"..dot.."Account Age  : <b>"..LocalPlayer.AccountAge.." days</b>"..
+        "\n"..dot.."Executor     : <b>"..getExecutorName().."</b>"..
+        "\n"..dot.."Device       : <b>"..getDeviceType().."</b>"..
+        "\n"..dot.."Exec Points  : <b>"..pts.."  ("..getExecRole(pts)..")</b>"..
+        "\n"..dot.."Role         : <b>"..getPlayerRole().."</b>"
+end
+
+local gameName = game.Name
+task.spawn(function()
+    local ok, info = pcall(function()
+        return MarketplaceService:GetProductInfo(game.PlaceId)
+    end)
+    if ok and info and info.Name then gameName = info.Name end
+end)
+
+----------------------------------------------------
+-- THUMBNAIL CACHE
+----------------------------------------------------
+local cachedHeadshot    = nil
+local cachedDevHeadshot = nil
+
+task.spawn(function()
+    local ok, hs = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            LocalPlayer.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size420x420
+        )
+    end)
+    if ok and hs then cachedHeadshot = hs end
+end)
+
+task.spawn(function()
+    local ok, hs = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            7312846416,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size420x420
+        )
+    end)
+    if ok and hs then cachedDevHeadshot = hs end
+end)
+
+local function getHeadshot()
+    if cachedHeadshot then return cachedHeadshot end
+    local ok, hs = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            LocalPlayer.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size420x420
+        )
+    end)
+    if ok and hs then cachedHeadshot = hs end
+    return cachedHeadshot
+end
+
+local function getDevHeadshot()
+    if cachedDevHeadshot then return cachedDevHeadshot end
+    local ok, hs = pcall(function()
+        return Players:GetUserThumbnailAsync(
+            7312846416,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size420x420
+        )
+    end)
+    if ok and hs then cachedDevHeadshot = hs end
+    return cachedDevHeadshot
+end
+
+----------------------------------------------------
+-- HELPERS
+----------------------------------------------------
+local function resolveAsset(id)
+    if id == nil or id == "" then return nil end
+    local s = tostring(id):gsub("%s+",""):gsub("rbxassetid://","")
+    if s == "" then return nil end
+    return "rbxassetid://"..s
+end
+
+local _cachedUIF = nil
+local _cachedNF  = nil
+
+local function getUserIconFrame()
+    if _cachedUIF and _cachedUIF.Parent then return _cachedUIF end
+    _cachedUIF, _cachedNF = nil, nil
+    local ok, result = pcall(function()
+        local mf = Window.UIElements.Main.Main
+        for _, child in ipairs(mf:GetChildren()) do
+            if child:IsA("TextButton") then
+                for _, inner in ipairs(child:GetChildren()) do
+                    if inner:IsA("ImageLabel") and inner.Name == "UserIcon" then
+                        return inner
+                    end
+                end
+            end
+        end
+        return nil
+    end)
+    if ok and result then
+        _cachedUIF = result
+        _cachedNF  = result:FindFirstChildOfClass("Frame")
+    end
+    return _cachedUIF
+end
+
+local function getNameFrame()
+    if _cachedNF and _cachedNF.Parent then return _cachedNF end
+    local uif = getUserIconFrame()
+    if uif then _cachedNF = uif:FindFirstChildOfClass("Frame") end
+    return _cachedNF
+end
+
+local function applyCustomProfile()
+    if config.anonymous then return end
+    local uif = getUserIconFrame()
+    if not uif then return end
+    for _, child in ipairs(uif:GetChildren()) do
+        if child:IsA("ImageLabel") and child.Name ~= "Outline" then
+            if config.customPfp ~= "" then
+                child.Image = "rbxassetid://"..config.customPfp
+            else
+                local hs = getHeadshot()
+                if hs then child.Image = hs end
+            end
+            break
+        end
+    end
+    local nf = getNameFrame()
+    if nf then
+        local d = nf:FindFirstChild("DisplayName")
+        local u = nf:FindFirstChild("UserName")
+        if d then d.Text = config.customName ~= "" and config.customName or LocalPlayer.DisplayName end
+        if u then u.Text = config.customSubName ~= "" and config.customSubName or LocalPlayer.Name end
+    end
+end
+
+local function resetProfileUI()
+    local uif = getUserIconFrame()
+    if not uif then return end
+    for _, child in ipairs(uif:GetChildren()) do
+        if child:IsA("ImageLabel") and child.Name ~= "Outline" then
+            local hs = getHeadshot()
+            if hs then child.Image = hs end
+            break
+        end
+    end
+    local nf = getNameFrame()
+    if nf then
+        local d = nf:FindFirstChild("DisplayName")
+        local u = nf:FindFirstChild("UserName")
+        if d then d.Text = LocalPlayer.DisplayName end
+        if u then u.Text = LocalPlayer.Name end
+    end
+end
+
+----------------------------------------------------
+-- WINDOW SIZE
+----------------------------------------------------
+local windowSize, minSize, maxSize
+if isMobile then
+    windowSize = UDim2.fromOffset(420, 320)
+    minSize    = Vector2.new(600, 300)
+    maxSize    = Vector2.new(650, 400)
+else
+    windowSize = UDim2.fromOffset(580, 460)
+    minSize    = Vector2.new(600, 350)
+    maxSize    = Vector2.new(850, 560)
+end
+
+----------------------------------------------------
+-- CREATE WINDOW
+-- FIX: resolveAsset untuk logo, Theme dari config,
+-- Background dari config
+----------------------------------------------------
+local windowParams = {
+    Title        = "RYEENZY | HUB",
+    Icon         = resolveAsset(config.logo) or "rbxassetid://102502086334580",
+    Author       = "By Ryeenzydevs",
+    Folder       = "RyeenzyHub",
+    Size         = windowSize,
+    MinSize      = minSize,
+    MaxSize      = maxSize,
+    Transparent  = false,
+    NewElements  = true,
+    Resizable    = true,
+    SideBarWidth = 200,
+    HideSearchBar    = false,
+    ScrollBarEnabled = true,
+    User = {
+        Enabled   = true,
+        Anonymous = config.anonymous,
+        Callback  = function() end,
+    },
+    Topbar = {
+        Height      = 44,
+        ButtonsType = config.buttonsType or "Mac",
+    },
+}
+
+local bgAsset = resolveAsset(config.background)
+if bgAsset then windowParams.Background = bgAsset end
+
+local Window = WindUI:CreateWindow(windowParams)
+
+-- WindUI Config Manager untuk tab Config
+-- ConfigManager fallback (tidak semua versi WindUI support ini)
+local RyeenzyConfig = nil
+pcall(function()
+    if Window.ConfigManager then
+        RyeenzyConfig = Window.ConfigManager:Config("RyeenzyHubConfig")
+    end
+end)
+
+task.spawn(function()
+    task.wait(0.3)
+    pcall(applyCustomProfile)
+end)
+
+----------------------------------------------------
+-- NOTIFY SOUND
+-- FIX: notify() tidak akan muncul sama sekali
+-- sebelum startupComplete = true
+-- Jadi notif hanya muncul kalau user beneran
+-- nyentuh/trigger fungsinya sendiri
+----------------------------------------------------
+local NotifySound = Instance.new("Sound")
+NotifySound.SoundId            = "rbxassetid://" .. (config.selectedSound or "107004225739474")
+NotifySound.Volume             = 0
+NotifySound.RollOffMaxDistance = 0
+NotifySound.Parent             = SoundService
+
+local startupComplete = false
+
+local function notify(title, content, icon, duration)
+    -- GUARD: skip total jika masih startup
+    if not startupComplete then return end
+    pcall(function() NotifySound:Play() end)
+    WindUI:Notify({
+        Title=title, Content=content,
+        Icon=icon or "info", Duration=duration or 3,
+    })
+end
+
+-- Startup notif khusus, bypass guard
+local function notifyStartup(title, content, icon, duration)
+    WindUI:Notify({
+        Title=title, Content=content,
+        Icon=icon or "info", Duration=duration or 4,
+    })
+end
+
+----------------------------------------------------
+-- TABS
+----------------------------------------------------
+local TabInfo = Window:Tab({
+    Title="Information", Desc="Script information & credits",
+    Icon="info", IconColor=getTabIconColor(config.theme),
+    IconShape="Circle", IconThemed=false,
+    Locked=false, ShowTabTitle=true, Border=true,
+})
+
+
+local TabSettings = Window:Tab({
+    Title="Settings", Desc="Script configuration",
+    Icon="settings-2", IconColor=getTabIconColor(config.theme),
+    IconShape="Circle", IconThemed=false,
+    Locked=false, ShowTabTitle=true, Border=true,
+})
+
+-- Config tab paling bawah
+local TabConfig = Window:Tab({
+    Title="Config", Desc="Save and load configurations",
+    Icon="database", IconColor=getTabIconColor(config.theme),
+    IconShape="Circle", IconThemed=false,
+    Locked=false, ShowTabTitle=true, Border=true,
+})
+
+local function syncTabIconColors(themeName)
+    local acc = getTabIconColor(themeName)
+    pcall(function()
+        for _, tab in ipairs({ TabInfo, TabSettings, TabConfig }) do
+            local icon = tab.UIElements and tab.UIElements.Icon
+            if icon and icon.ImageLabel then
+                icon.ImageLabel.ImageColor3 = acc
+            end
+        end
+    end)
+end
+
+----------------------------------------------------
+-- TAB INFO
+----------------------------------------------------
+local PFX = "rbxassetid://"
+
+local parPlayerCard = nil
+local parDev        = nil
+
+local function updatePlayerCard(themeName)
+    if not parPlayerCard then return end
+    pcall(function()
+        if parPlayerCard.SetDesc then
+            parPlayerCard:SetDesc(buildPlayerDesc(config.anonymous, themeName))
+        end
+
+    end)
+end
+
+local function buildInfoParagraphs(themeName)
+    local imgs = getThemeImgs(themeName)
+    local acc  = getThemeAccent(themeName)
+
+    if parPlayerCard then
+        updatePlayerCard(themeName)
+        return
+    end
+
+    -- 1. PLAYER CARD
+    local playerImg = getHeadshot() or (PFX.."118704968198375")
+    parPlayerCard = TabInfo:Paragraph({
+        Title       = config.anonymous and "Anonymous" or LocalPlayer.DisplayName,
+        Desc        = buildPlayerDesc(config.anonymous, themeName),
+        Image       = playerImg,
+        ImageSize   = 60,
+        ImageColor  = acc,
+        Transparent = true,
+        Buttons     = {}
+    })
+
+    -- 3. DEV PROFILE
+    local devImg = getDevHeadshot() or (PFX.."118704968198375")
+    parDev = TabInfo:Paragraph({
+        Title       = "Dev Profile",
+        Desc        = "RyeenzyExp\nStatus: Developer\nDevice: Mobile",
+        Image       = devImg,
+        ImageSize   = 60,
+        Transparent = true,
+        Buttons = {{
+            Icon="link", Title="Copy Profile",
+            Callback=function()
+                if setclipboard then
+                    setclipboard("https://www.roblox.com/users/ryeenzyexp/profile")
+                end
+                notify("Profile","Link copied!","link",2)
+            end
+        }}
+    })
+end
+
+buildInfoParagraphs(config.theme)
+
+----------------------------------------------------
+-- TAB SETTINGS
+----------------------------------------------------
+local SolsTag
+local FpsTag
+
+TabSettings:Section({ Title="Appearance" })
+
+local themeList = {
+    "Dark","Light","Rose","Plant","Red",
+    "Indigo","Sky","Violet","Amber","Emerald",
+    "Midnight","Crimson",
+}
+
+local function buildThemeDropdownValues()
+    local values = {}
+    for _, name in ipairs(themeList) do
+        table.insert(values, {
+            Title=name, Desc=name.." theme", Icon="palette",
+            Callback=function()
+                config.theme = name
+                saveConfig(config)
+                pcall(function() WindUI:SetTheme(name) end)
+                local ng = makeThemeGradient(name)
+                if SolsTag and SolsTag.SetColor then SolsTag:SetColor(ng) end
+                if FpsTag  and FpsTag.SetColor  then FpsTag:SetColor(ng)  end
+                syncTabIconColors(name)
+                pcall(function()
+                    Window:EditOpenButton({
+                        Title="RYEENZY", Icon="activity",
+                        CornerRadius=UDim.new(0,12), StrokeThickness=2,
+                        Color=makeOpenButtonColor(name),
+                        OnlyMobile=false, Enabled=true, Draggable=true,
+                    })
+                end)
+                updatePlayerCard(name)
+                notify("Theme","Set to \""..name.."\".", "palette",4)
+            end
+        })
+    end
+    return values
+end
+
+TabSettings:Dropdown({
+    Title="UI Theme", Desc="Changes theme, tags & open button",
+    Values=buildThemeDropdownValues(),
+})
+
+TabSettings:Dropdown({
+    Title="Window Button Style", Desc="Topbar button style",
+    Values={
+        { Title="Mac",     Desc="Colored circle buttons", Icon="circle",
+          Callback=function() config.buttonsType="Mac"     saveConfig(config) notify("Button Style","Re-execute to apply.","circle",4) end },
+        { Title="Default", Desc="Standard icon buttons",  Icon="square",
+          Callback=function() config.buttonsType="Default" saveConfig(config) notify("Button Style","Re-execute to apply.","square",4) end },
+    },
+})
+
+TabSettings:Section({ Title="Window Style" })
+
+TabSettings:Input({
+    Title="Background ID", Desc="Window background image ID",
+    Icon="wallpaper", Type="Default", Placeholder="e.g. 1234567890",
+    Value=config.background, Flag="custom_background",
+    Callback=function(text)
+        config.background = text:gsub("%s+",""):gsub("rbxassetid://","")
+        saveConfig(config)
+        notify("Background Saved","Re-execute to apply.","image",4)
+    end
+})
+
+TabSettings:Input({
+    Title="Logo ID", Desc="Window logo image ID",
+    Icon="aperture", Type="Default", Placeholder="e.g. 102502086334580",
+    Value=config.logo, Flag="custom_logo",
+    Callback=function(text)
+        config.logo = text:gsub("%s+",""):gsub("rbxassetid://","")
+        saveConfig(config)
+        notify("Logo Saved","Re-execute to apply.","aperture",4)
+    end
+})
+
+TabSettings:Button({
+    Title="Reset Window Style", Desc="Restore default background and logo",
+    Icon="rotate-ccw", Color=Color3.fromRGB(200,50,50),
+    Callback=function()
+        config.background = defaultConfig.background
+        config.logo       = defaultConfig.logo
+        saveConfig(config)
+        notify("Reset","Restored. Re-execute to apply.","rotate-ccw",4)
+    end
+})
+
+TabSettings:Section({ Title="Custom Profile" })
+
+TabSettings:Toggle({
+    Title="Anonymous Mode", Desc="Show as Anonymous in sidebar",
+    Icon="eye-off", Value=config.anonymous, Flag="anon_mode",
+    Callback=function(state)
+        config.anonymous = state
+        saveConfig(config)
+        pcall(function() Window.User:SetAnonymous(state) end)
+        if not state then
+            task.delay(0.1, function() pcall(applyCustomProfile) end)
+        end
+        task.delay(0.15, function() updatePlayerCard(config.theme) end)
+        notify(state and "Anonymous On" or "Anonymous Off",
+            state and "Identity hidden." or "Profile visible.", "eye-off",3)
+    end
+})
+
+TabSettings:Input({
+    Title="Display Name", Desc="Custom sidebar display name",
+    Icon="user", Type="Default", Placeholder="e.g. RaffleW",
+    Value=config.customName, Flag="custom_name",
+    Callback=function(text)
+        config.customName = text
+        saveConfig(config)
+        if not config.anonymous then
+            pcall(function()
+                local nf = getNameFrame() if not nf then return end
+                local lbl = nf:FindFirstChild("DisplayName")
+                if lbl then lbl.Text = text ~= "" and text or LocalPlayer.DisplayName end
+            end)
+        end
+        notify("Display Name", text ~= "" and "Set to \""..text.."\"." or "Reverted.","user",3)
+    end
+})
+
+TabSettings:Input({
+    Title="Username", Desc="Custom sidebar username",
+    Icon="at-sign", Type="Default", Placeholder="e.g. @rafflew",
+    Value=config.customSubName, Flag="custom_subname",
+    Callback=function(text)
+        config.customSubName = text
+        saveConfig(config)
+        if not config.anonymous then
+            pcall(function()
+                local nf = getNameFrame() if not nf then return end
+                local lbl = nf:FindFirstChild("UserName")
+                if lbl then lbl.Text = text ~= "" and text or LocalPlayer.Name end
+            end)
+        end
+        notify("Username", text ~= "" and "Set to \""..text.."\"." or "Reverted.","at-sign",3)
+    end
+})
+
+TabSettings:Input({
+    Title="Profile Picture ID", Desc="Custom profile picture asset ID",
+    Icon="image", Type="Default", Placeholder="e.g. 1234567890",
+    Value=config.customPfp, Flag="custom_pfp",
+    Callback=function(text)
+        local cleaned = text:gsub("%s+",""):gsub("rbxassetid://","")
+        config.customPfp = cleaned
+        saveConfig(config)
+        if not config.anonymous then
+            pcall(function()
+                local uif = getUserIconFrame() if not uif then return end
+                for _, child in ipairs(uif:GetChildren()) do
+                    if child:IsA("ImageLabel") and child.Name ~= "Outline" then
+                        if cleaned ~= "" then
+                            child.Image = "rbxassetid://"..cleaned
+                        else
+                            local hs = getHeadshot()
+                            if hs then child.Image = hs end
+                        end
+                        break
+                    end
+                end
+            end)
+        end
+        notify("Profile Picture", cleaned ~= "" and "Applied!" or "Reverted.","image",3)
+    end
+})
+
+TabSettings:Button({
+    Title="Reset Profile", Desc="Revert to Roblox account info",
+    Icon="rotate-ccw", Color=Color3.fromRGB(200,50,50),
+    Callback=function()
+        config.customName="" config.customSubName="" config.customPfp="" config.anonymous=false
+        saveConfig(config)
+        pcall(function() Window.User:SetAnonymous(false) end)
+        task.delay(0.1, function()
+            pcall(resetProfileUI)
+            updatePlayerCard(config.theme)
+        end)
+        notify("Profile Reset","Reverted to Roblox account.","rotate-ccw",3)
+    end
+})
+
+TabSettings:Section({ Title="Notification Sound" })
+
+local presetSounds = {
+    { name="Samsung",   id="107004225739474" },
+    { name="Apple Pay", id="138740832528048" },
+    { name="Discord",   id="135272730546427" },
+    { name="FTF",       id="110872490887215" },
+    { name="Apple",     id="73722479618078"  },
+}
+
+config.customSounds  = config.customSounds  or {}
+config.selectedSound = config.selectedSound or "107004225739474"
+
+local NotifSoundDropdown
+
+local function buildNotifDropdownValues()
+    local values = {{ Type="Divider" }}
+    for _, p in ipairs(presetSounds) do
+        local pid, pname = p.id, p.name
+        table.insert(values,{
+            Title=pname, Desc="Preset sound", Icon="music",
+            Callback=function()
+                config.selectedSound=pid
+                NotifySound.SoundId="rbxassetid://"..pid
+                saveConfig(config)
+                notify("Sound","Set to "..pname,"music",3)
+            end,
+        })
+    end
+    if #config.customSounds > 0 then
+        table.insert(values,{ Type="Divider" })
+        for _, c in ipairs(config.customSounds) do
+            local cid, cname = c.id, c.name
+            table.insert(values,{
+                Title=cname, Desc="Custom sound", Icon="music-2",
+                Callback=function()
+                    config.selectedSound=cid
+                    NotifySound.SoundId="rbxassetid://"..cid
+                    saveConfig(config)
+                    notify("Sound","Set to "..cname,"music-2",3)
+                end,
+            })
+        end
+    end
+    return values
+end
+
+NotifSoundDropdown = TabSettings:Dropdown({
+    Title="Notification Sound", Desc="Choose notification sound",
+    Values=buildNotifDropdownValues(),
+})
+
+TabSettings:Input({
+    Title="Add Custom Sound", Desc="Sound asset ID to add",
+    Icon="plus-circle", Type="Default", Placeholder="e.g. 1234567890", Value="",
+    Callback=function(text)
+        local cleaned = text:gsub("%s+",""):gsub("rbxassetid://","")
+        if cleaned=="" then notify("Error","Enter a valid asset ID.","alert-circle",3) return end
+        for _,c in ipairs(config.customSounds) do
+            if c.id==cleaned then notify("Duplicate","ID already added.","alert-circle",3) return end
+        end
+        local cname="Custom Notif "..(#config.customSounds+1)
+        table.insert(config.customSounds,{name=cname,id=cleaned})
+        saveConfig(config)
+        pcall(function() NotifSoundDropdown:Update({Values=buildNotifDropdownValues()}) end)
+        notify("Sound Added",cname.." added!","plus-circle",3)
+    end,
+})
+
+TabSettings:Button({
+    Title="Delete All Custom Sounds", Desc="Remove all custom sounds",
+    Icon="trash-2", Color=Color3.fromRGB(200,50,50),
+    Callback=function()
+        if #config.customSounds==0 then notify("Empty","No custom sounds.","info",3) return end
+        config.customSounds={}
+        local isPreset=false
+        for _,p in ipairs(presetSounds) do
+            if p.id==config.selectedSound then isPreset=true break end
+        end
+        if not isPreset then
+            config.selectedSound="107004225739474"
+            NotifySound.SoundId="rbxassetid://107004225739474"
+        end
+        saveConfig(config)
+        pcall(function() NotifSoundDropdown:Update({Values=buildNotifDropdownValues()}) end)
+        notify("Deleted","All custom sounds removed.","trash-2",3)
+    end,
+})
+
+TabSettings:Slider({
+    Title="Volume", Desc="Notification sound volume",
+    Value={Min=0,Max=1,Default=0.6}, Step=0.05, Flag="notif_volume",
+    Callback=function(v) NotifySound.Volume=v end,
+})
+
+TabSettings:Toggle({
+    Title="Mute Notifications", Desc="Silence notification sounds",
+    Icon="volume-x", Value=false, Flag="notif_mute",
+    Callback=function(state) NotifySound.Volume=state and 0 or 0.6 end,
+})
+
+TabSettings:Button({
+    Title="Test Notification", Desc="Preview notification sound",
+    Icon="bell",
+    Callback=function()
+        notify("Test","This is what your notifications sound like!","bell",3)
+    end,
+})
+
+TabSettings:Section({ Title="Keybind" })
+
+TabSettings:Keybind({
+    Title="Toggle UI", Desc="Keybind to open/close the window",
+    Value="RightControl", Flag="ui_keybind",
+    Callback=function(v)
+        local key = typeof(v) == "EnumItem" and v or Enum.KeyCode[tostring(v)]
+        if key then Window:SetToggleKey(key) end
+    end
+})
+
+----------------------------------------------------
+-- TAB CONFIG
+-- Menggunakan WindUI ConfigManager untuk save/load
+-- semua elemen yang punya Flag
+----------------------------------------------------
+TabConfig:Section({ Title="Configuration Manager" })
+
+TabConfig:Paragraph({
+    Title       = "How it works",
+    Desc        = "Save stores all flagged settings.\nLoad restores them.\nDelete removes the saved file.",
+    Transparent = true,
+    Buttons     = {}
+})
+
+TabConfig:Button({
+    Title="Save Config",
+    Desc="Save all current settings to file",
+    Icon="save",
+    Color=Color3.fromRGB(34, 139, 34),
+    Callback=function()
+        local ok, err = pcall(function()
+            assert(RyeenzyConfig, "ConfigManager not supported")
+            RyeenzyConfig:Save()
+        end)
+        if ok then
+            notify("Config","Configuration saved successfully!","save",3)
+        else
+            notify("Config","Save failed: "..tostring(err),"alert-circle",4)
+        end
+    end
+})
+
+TabConfig:Button({
+    Title="Load Config",
+    Desc="Load and apply saved settings",
+    Icon="folder-open",
+    Color=Color3.fromRGB(30, 100, 200),
+    Callback=function()
+        local ok, err = pcall(function()
+            assert(RyeenzyConfig, "ConfigManager not supported")
+            RyeenzyConfig:Load()
+        end)
+        if ok then
+            notify("Config","Configuration loaded successfully!","folder-open",3)
+        else
+            notify("Config","Load failed: "..tostring(err),"alert-circle",4)
+        end
+    end
+})
+
+TabConfig:Button({
+    Title="Delete Config",
+    Desc="Delete the saved configuration file",
+    Icon="trash-2",
+    Color=Color3.fromRGB(200,50,50),
+    Callback=function()
+        local ok, err = pcall(function()
+            assert(RyeenzyConfig, "ConfigManager not supported")
+            RyeenzyConfig:Delete()
+        end)
+        if ok then
+            notify("Config","Configuration deleted.","trash-2",3)
+        else
+            notify("Config","Delete failed: "..tostring(err),"alert-circle",4)
+        end
+    end
+})
+
+----------------------------------------------------
+-- OPEN BUTTON
+----------------------------------------------------
+Window:EditOpenButton({
+    Title="RYEENZY", Icon="activity",
+    CornerRadius=UDim.new(0,12), StrokeThickness=2,
+    Color=makeOpenButtonColor(config.theme),
+    OnlyMobile=false, Enabled=true, Draggable=true,
+})
+
+----------------------------------------------------
+-- TOPBAR TAGS
+----------------------------------------------------
+SolsTag = Window:Tag({
+    Title="RYEENZY | HUB",
+    Color=makeThemeGradient(config.theme),
+})
+
+FpsTag = Window:Tag({
+    Title="Fps: ... | Ping: ...",
+    Color=makeThemeGradient(config.theme),
+})
+
+----------------------------------------------------
+-- FPS / PING LOOP
+----------------------------------------------------
+task.spawn(function()
+    local lastTime   = os.clock()
+    local frameCount = 0
+    RunService.RenderStepped:Connect(function() frameCount+=1 end)
+    while task.wait(1) do
+        pcall(function()
+            local now  = os.clock()
+            local fps  = math.floor(frameCount/(now-lastTime)+0.5)
+            frameCount = 0
+            lastTime   = now
+            local ping = 0
+            pcall(function()
+                ping = math.floor(
+                    StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()
+                )
+            end)
+            if FpsTag and FpsTag.SetTitle then
+                FpsTag:SetTitle(string.format("Fps:%d | Ping:%d",fps,ping))
+            end
+        end)
+    end
+end)
+
+----------------------------------------------------
+
+local SAMPLE_INTERVAL        = 0.04
+local MIN_PLAYBACK_SPEED     = 8
+local MAX_PLAYBACK_SPEED     = 500
+local DEFAULT_PLAYBACK_SPEED = 16
+local TELEPORT_THRESHOLD     = 200
+local RESUME_DISTANCE_THRESHOLD = 200
+
+-- PATCH: Kalau player jauh dari route, jangan TP ke start.
+-- Player akan lari ke titik route terdekat pakai speed map lalu playback langsung jalan.
+AUTO_RUN_TO_ROUTE_ENABLED = true
+AUTO_RUN_TO_ROUTE_STOP_DISTANCE = 3.5
+AUTO_RUN_TO_ROUTE_MAX_TIME = 12
+AUTO_RUN_TO_ROUTE_MIN_SPEED = 16
+AUTO_RUN_TO_ROUTE_MAX_SPEED = 500
+
+-- PATCH ANTI BOLAK-BALIK SAAT MASUK TRACK:
+-- Target auto-run dibuat sedikit maju dari titik terdekat, diberi toleransi,
+-- dan kalau avatar sudah melewati target / stuck, playback langsung lanjut dari titik route terdekat.
+AUTO_RUN_TO_ROUTE_LOOKAHEAD_FRAMES = 8
+AUTO_RUN_TO_ROUTE_ACCEPT_MULTIPLIER = 1.65
+AUTO_RUN_TO_ROUTE_OVERSHOOT_MULTIPLIER = 2.4
+AUTO_RUN_TO_ROUTE_STUCK_SECONDS = 0.85
+AUTO_RUN_TO_ROUTE_STUCK_MIN_MOVE = 0.75
+AUTO_RUN_TO_ROUTE_RETARGET_SECONDS = 0.35
+
+-- PATCH PLAY FINISH:
+-- Kalau route sudah selesai dan avatar masih di area finish/marker merah, klik Play lagi harus ulang dari START.
+-- Kalau avatar sudah jauh dari finish, jangan paksa start; tetap pakai titik route terdekat.
+PLAY_FINISH_RESTART_DISTANCE = 18
+PLAY_FINISH_RESTART_TIME_WINDOW = 0.35
+
+-- PATCH LOOP SPEED:
+-- Speed dikunci per sesi play supaya mode loop tidak menggandakan multiplier/velocity.
+LOOP_SPEED_MULTIPLIER_MIN = 0.1
+-- PATCH STABLE SPEED: max multiplier diturunkan supaya input speed tidak bikin playback dobel kenceng/macat.
+LOOP_SPEED_MULTIPLIER_MAX = 50
+
+-- PATCH STABLE SPEED / ANTI MACET
+-- Jangan biarkan WalkSpeed/velocity runtime ikut angka rusak/terlalu besar.
+-- Speed setting tetap live, tapi dibatasi agar tidak dobel kenceng dan avatar tidak ketarik/macat.
+KACUNG_MARV_STABLE_MAX_PLAY_SPEED = 500
+KACUNG_MARV_STABLE_MAX_RESTORE_SPEED = MAX_PLAYBACK_SPEED -- restore map/coil speed asli, bukan dibatasi 120
+KACUNG_MARV_STABLE_MAX_AIR_HSPEED = 500
+KACUNG_MARV_STABLE_MAX_RUN_HSPEED = 500
+KACUNG_MARV_STABLE_MAX_YSPEED = 220
+
+-- ========== KEY SYSTEM VARIABLES ==========
+local userLevel    = "none"
+local validatedKey = nil
+local deviceId     = nil
+local apiConnected = false
+local remainingDays = 0
+
+-- ========== PLAYBACK VARIABLES ==========
+local isRecording            = false
+local recordedFrames         = {}
 local recordStartTick        = 0
 local sampleAcc              = 0
 local currentRecordTime      = 0
@@ -18,23 +1086,90 @@ local activeClimbTrack       = nil
 local activeClimbHumanoid    = nil
 
 local currentPlaybackSpeed   = DEFAULT_PLAYBACK_SPEED
--- PATCH LIVE SPEED: nilai
-    -- Kosong = hotkey dimatikan.
-    if value == "" or value == "NONE" or value == "OFF" or value == "-" then
-        return ""
-    end
+-- PATCH LIVE SPEED: nilai runtime ini dipakai Heartbeat playback, jadi speed bisa berubah saat Play masih aktif.
+local playbackRuntimeSpeed  = DEFAULT_PLAYBACK_SPEED
+local originalRecordingSpeed = DEFAULT_PLAYBACK_SPEED
 
-    -- Ambil 1 karakter pertama saja sesuai request: contoh P untuk Play, X untuk Stop.
-    local oneChar = value:match("[A-Z0-9]")
-    if oneChar then
-        return oneChar
-    end
+-- FIX: Variabel untuk menyimpan state karakter SEBELUM playback dimulai
+local savedWalkSpeed         = 16
+local savedJumpPower         = 50
+local savedJumpHeight        = 7.2
+local savedUseJumpPower      = true
+local savedAutoRotate        = true
 
-    fallback = tostring(fallback or ""):upper()
-    return fallback:match("[A-Z0-9]") or ""
+-- PATCH PLAY -> STOP CLEAN STATE:
+-- Stop manual jangan dianggap finish, dan Stop harus bisa membatalkan fase auto-run menuju route.
+local playbackStopRequested  = false
+local autoRunToRouteActive   = false
+
+-- ========== PLAY/STOP SPAM GUARD ==========
+-- Global tanpa local banyak-banyak supaya aman dari limit register executor.
+PLAYSTOP_ACTION_BUSY = false
+PLAYSTOP_LOCK_UNTIL = 0
+PLAYSTOP_RESTART_COOLDOWN = 0.45
+PLAYSTOP_TAP_COOLDOWN = 0.42
+PLAYSTOP_LAST_NOTICE_CLOCK = 0
+OUTSIDE_PLAYSTOP_LAST_TAP_CLOCK = 0
+
+local currentPlaybackTime    = 0
+local totalPlaybackDuration  = 0
+local lastPlaybackFrameIndex = 1
+local playbackPaused         = false
+local lastKnownPosition      = nil
+local lastKnownPlaybackTime  = 0
+local playbackFinished       = false
+local isLoopMode             = false
+
+local pathRecordActive = false
+local pathRecordParts  = {}
+local pathRecordBeams  = {}
+
+local speedometerActive    = false
+local speedometerConnection = nil
+local currentPlayerSpeed   = 0
+
+-- Timer UI Elements
+local timerGui        = nil
+local timerFrame      = nil
+local timerLabel      = nil
+local timerTextLabel  = nil
+local recordIndicator = nil
+local frameCountLabel = nil
+
+-- WindUI Window reference
+local Window = nil
+
+local showNotification
+
+-- Settings
+local uiSettings = {
+    theme       = "Dark",
+    accentColor = Color3.fromRGB(200, 150, 255),
+    transparency = 0.02,
+    fontSize    = "Medium",
+    showOutsidePlayStop = false,
+    playHotkey = "P",
+    stopHotkey = "X",
+    minimizeHotkey = "M",
+    fpsBoostActive = false,
+    clickSoundEnabled = true,
+    clickSoundVolume = 0.55,
+}
+
+-- [UI Settings handled by template config system]
+
+-- Alias showNotification -> notify (template style)
+local function showNotification(title, content, duration)
+    if not startupComplete then return end
+    WindUI:Notify({
+        Title   = tostring(title or ""),
+        Content = tostring(content or ""),
+        Icon    = "info",
+        Duration = duration or 3,
+        CanClose = true,
+    })
 end
 
-local function loadUiSettings()
     local data = nil
 
     if type(_G[UI_SETTINGS_STORAGE_NAME]) == "table" then
@@ -121,215 +1256,14 @@ end
 
 loadUiSettings()
 
--- ========== WINDUI PANELBACKGROUND NIL FIX ==========
--- Error yang muncul: attempt to index nil with 'PanelBackground'.
--- Penyebabnya biasanya theme WindUI belum siap / theme custom tidak punya key baru.
--- Patch ini membuat theme aman sebelum CreateWindow dan retry otomatis pakai Dark.
-WINDUI_SAFE_THEME_NAME = "Dark"
-
-function windUIThemePalette(themeName)
-    themeName = sanitizeThemeName(themeName or "Dark")
-
-    local palettes = {
-        Dark   = { Accent = Color3.fromRGB(200,150,255), Background = Color3.fromRGB(18,18,22), Panel = Color3.fromRGB(24,24,30), Button = Color3.fromRGB(42,38,52), Outline = Color3.fromRGB(82,72,105), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(170,170,185), Icon = Color3.fromRGB(210,170,255) },
-        Light  = { Accent = Color3.fromRGB(120,90,220),  Background = Color3.fromRGB(245,245,250), Panel = Color3.fromRGB(255,255,255), Button = Color3.fromRGB(232,230,242), Outline = Color3.fromRGB(190,185,215), Text = Color3.fromRGB(20,20,24),    Placeholder = Color3.fromRGB(105,105,125), Icon = Color3.fromRGB(120,90,220) },
-        Rose   = { Accent = Color3.fromRGB(235,95,145),  Background = Color3.fromRGB(35,14,24),   Panel = Color3.fromRGB(44,18,30),   Button = Color3.fromRGB(95,35,58),    Outline = Color3.fromRGB(255,130,175), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(220,160,185), Icon = Color3.fromRGB(255,145,190) },
-        Violet = { Accent = Color3.fromRGB(165,105,255), Background = Color3.fromRGB(24,14,40),   Panel = Color3.fromRGB(31,18,52),   Button = Color3.fromRGB(70,45,125),   Outline = Color3.fromRGB(195,145,255), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(190,165,220), Icon = Color3.fromRGB(210,170,255) },
-        Amber  = { Accent = Color3.fromRGB(255,185,70),  Background = Color3.fromRGB(35,24,10),   Panel = Color3.fromRGB(45,31,13),   Button = Color3.fromRGB(95,65,22),    Outline = Color3.fromRGB(255,205,95),  Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(225,195,145), Icon = Color3.fromRGB(255,215,110) },
-        Red    = { Accent = Color3.fromRGB(180,40,50),   Background = Color3.fromRGB(25,10,12),   Panel = Color3.fromRGB(34,14,17),   Button = Color3.fromRGB(120,35,45),   Outline = Color3.fromRGB(255,90,100), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(200,150,150), Icon = Color3.fromRGB(255,120,130) },
-        Blue   = { Accent = Color3.fromRGB(40,100,220),  Background = Color3.fromRGB(10,15,30),   Panel = Color3.fromRGB(14,22,44),   Button = Color3.fromRGB(35,70,150),   Outline = Color3.fromRGB(90,150,255), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(150,170,220), Icon = Color3.fromRGB(120,170,255) },
-        Green  = { Accent = Color3.fromRGB(40,170,90),   Background = Color3.fromRGB(10,25,15),   Panel = Color3.fromRGB(14,35,21),   Button = Color3.fromRGB(35,110,65),   Outline = Color3.fromRGB(90,255,150), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(150,210,170), Icon = Color3.fromRGB(120,255,160) },
-        Cyan   = { Accent = Color3.fromRGB(40,180,200),  Background = Color3.fromRGB(8,20,25),    Panel = Color3.fromRGB(12,32,38),   Button = Color3.fromRGB(30,110,130),  Outline = Color3.fromRGB(90,230,255), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(150,220,230), Icon = Color3.fromRGB(120,240,255) },
-        Purple = { Accent = Color3.fromRGB(140,70,220),  Background = Color3.fromRGB(18,10,30),   Panel = Color3.fromRGB(26,14,45),   Button = Color3.fromRGB(85,45,150),   Outline = Color3.fromRGB(190,120,255), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(190,160,220), Icon = Color3.fromRGB(210,150,255) },
-        Pink   = { Accent = Color3.fromRGB(220,70,160),  Background = Color3.fromRGB(30,10,22),   Panel = Color3.fromRGB(42,14,30),   Button = Color3.fromRGB(150,45,110),  Outline = Color3.fromRGB(255,120,200), Text = Color3.fromRGB(255,255,255), Placeholder = Color3.fromRGB(220,160,200), Icon = Color3.fromRGB(255,150,210) },
-    }
-
-    return palettes[themeName] or palettes.Dark
-end
-
-function windUIBuildSafeTheme(themeName)
-    themeName = sanitizeThemeName(themeName or "Dark")
-    local p = windUIThemePalette(themeName)
-
-    return {
-        Name = themeName,
-        Accent = p.Accent,
-        Background = p.Background,
-        PanelBackground = p.Panel,
-        Panel = p.Panel,
-        WindowBackground = p.Panel,
-        Topbar = p.Panel,
-        TopbarBackground = p.Panel,
-        TabBackground = p.Panel,
-        Element = p.Button,
-        ElementBackground = p.Button,
-        ElementHover = p.Outline,
-        ElementActive = p.Accent,
-        Button = p.Button,
-        ButtonBackground = p.Button,
-        ButtonHover = p.Outline,
-        ButtonActive = p.Accent,
-        Toggle = p.Accent,
-        ToggleBackground = p.Button,
-        Slider = p.Accent,
-        Dropdown = p.Button,
-        Input = p.Button,
-        Text = p.Text,
-        TextColor = p.Text,
-        SubText = p.Placeholder,
-        Placeholder = p.Placeholder,
-        Icon = p.Icon,
-        Outline = p.Outline,
-        Border = p.Outline,
-        Stroke = p.Outline,
-        Dialog = p.Panel,
-        DialogBackground = p.Panel,
-    }
-end
-
-function windUIFillThemeMissing(targetTheme, fallbackTheme)
-    targetTheme = type(targetTheme) == "table" and targetTheme or {}
-    fallbackTheme = type(fallbackTheme) == "table" and fallbackTheme or windUIBuildSafeTheme("Dark")
-
-    for key, value in pairs(fallbackTheme) do
-        if targetTheme[key] == nil then
-            targetTheme[key] = value
-        end
-    end
-
-    -- Key paling penting untuk WindUI versi baru.
-    targetTheme.PanelBackground = targetTheme.PanelBackground or targetTheme.Panel or targetTheme.Background or fallbackTheme.PanelBackground
-    targetTheme.Background = targetTheme.Background or targetTheme.PanelBackground or fallbackTheme.Background
-    targetTheme.Text = targetTheme.Text or targetTheme.TextColor or fallbackTheme.Text
-    targetTheme.Outline = targetTheme.Outline or targetTheme.Border or targetTheme.Stroke or fallbackTheme.Outline
-    targetTheme.Accent = targetTheme.Accent or fallbackTheme.Accent
-    targetTheme.Button = targetTheme.Button or targetTheme.Element or targetTheme.Background or fallbackTheme.Button
-    targetTheme.Icon = targetTheme.Icon or targetTheme.Accent or fallbackTheme.Icon
-    targetTheme.Placeholder = targetTheme.Placeholder or targetTheme.SubText or fallbackTheme.Placeholder
-
-    return targetTheme
-end
-
-function windUIEnsureTheme(themeName)
-    themeName = sanitizeThemeName(themeName or "Dark")
-    local safeTheme = windUIBuildSafeTheme(themeName)
-    WINDUI_SAFE_THEME_NAME = themeName
-
-    pcall(function()
-        if WindUI and WindUI.AddTheme then
-            WindUI:AddTheme(safeTheme)
-        end
-    end)
-
-    pcall(function()
-        if WindUI then
-            if type(WindUI.Themes) ~= "table" then
-                WindUI.Themes = {}
-            end
-
-            WindUI.Themes[themeName] = windUIFillThemeMissing(WindUI.Themes[themeName] or {}, safeTheme)
-            WindUI.Themes.Dark = windUIFillThemeMissing(WindUI.Themes.Dark or {}, windUIBuildSafeTheme("Dark"))
-
-            if type(WindUI.CurrentTheme) == "table" then
-                WindUI.CurrentTheme = windUIFillThemeMissing(WindUI.CurrentTheme, safeTheme)
-            end
-
-            if type(WindUI.Theme) == "table" then
-                WindUI.Theme = windUIFillThemeMissing(WindUI.Theme, safeTheme)
-            end
-
-            if type(WindUI.Colors) == "table" then
-                WindUI.Colors = windUIFillThemeMissing(WindUI.Colors, safeTheme)
-            end
-        end
-    end)
-
-    pcall(function()
-        if WindUI and WindUI.SetTheme then
-            WindUI:SetTheme(themeName)
-        end
-    end)
-
-    return themeName
-end
-
-function windUICreateWindowSafe(config, label)
-    config = type(config) == "table" and config or {}
-    label = tostring(label or "WindUI Window")
-
-    local themeName = windUIEnsureTheme(config.Theme or (uiSettings and uiSettings.theme) or "Dark")
-    config.Theme = themeName
-
-    local ok, result = pcall(function()
-        return WindUI:CreateWindow(config)
-    end)
-
-    if ok and result then
-        return result, nil
-    end
-
-    warn("[KACUNG MARV] " .. label .. " gagal dibuat, retry Dark theme: " .. tostring(result))
-
-    -- Retry aman: beberapa versi WindUI/Delta error saat Transparent true + theme nil.
-    config.Theme = windUIEnsureTheme("Dark")
-    config.Transparent = false
-
-    ok, result = pcall(function()
-        return WindUI:CreateWindow(config)
-    end)
-
-    if ok and result then
-        uiSettings.theme = "Dark"
-        return result, nil
-    end
-
-    return nil, result
-end
-
-windUIEnsureTheme(uiSettings.theme or "Dark")
-
--- ========== CLICK SOUND EFFECT ==========
-local CLICK_SOUND_ID = "rbxassetid://12221967"
-local lastClickSoundClock = 0
-local clickSoundReady = false
-
-local function playClickSound()
-    -- Guard supaya suara tidak bunyi sendiri saat WindUI sedang membuat / refresh element.
-    if clickSoundReady ~= true then return end
-    if uiSettings.clickSoundEnabled == false then return end
-
-    local now = os.clock()
-    if now - lastClickSoundClock < 0.06 then
-        return
-    end
-    lastClickSoundClock = now
-
-    pcall(function()
-        local sound = Instance.new("Sound")
-        sound.Name = "KACUNG_MARV_ClickSound"
-        sound.SoundId = CLICK_SOUND_ID
-        sound.Volume = math.max(0, math.min(2, tonumber(uiSettings.clickSoundVolume) or 0.55))
-        sound.PlaybackSpeed = 1
-        sound.Parent = SoundService
-        sound:Play()
-
-        task.delay(1.35, function()
-            pcall(function()
-                if sound and sound.Parent then
-                    sound:Destroy()
-                end
-            end)
-        end)
-    end)
-end
+-- [WindUI helpers handled by template UI system]
 
 -- ========== VIP+ GLOBAL FLAGS ==========
-if not _G.KACUNG_MARV_ESP_Active       then _G.KACUNG_MARV_ESP_Active       = false end
-if not _G.KACUNG_MARV_RedESP_Active    then _G.KACUNG_MARV_RedESP_Active    = false end
-if not _G.KACUNG_MARV_NameTag_Active   then _G.KACUNG_MARV_NameTag_Active   = false end
-if not _G.KACUNG_MARV_Invis_Active     then _G.KACUNG_MARV_Invis_Active     = false end
-if not _G.KACUNG_MARV_GhostSpeed_Active then _G.KACUNG_MARV_GhostSpeed_Active = false end
-if not _G.KACUNG_MARV_Noclip_Active    then _G.KACUNG_MARV_Noclip_Active    = false end
+if not false -- removed       then false -- removed       = false end
+if not false -- removed    then false -- removed    = false end
+if not false -- removed   then false -- removed   = false end
+if not false -- removed     then false -- removed     = false end
+if not false -- removed    then false -- removed    = false end
 if not _G.KACUNG_MARV_PlayerSpeedTag_Active then _G.KACUNG_MARV_PlayerSpeedTag_Active = false end
 
 -- ========== NOTIFICATION ==========
@@ -580,8 +1514,8 @@ local function getDeviceId()
         return tostring(id)
     end
 
-    if player and player.UserId then
-        return tostring(player.UserId)
+    if player and LocalPlayer.UserId then
+        return tostring(LocalPlayer.UserId)
     end
 
     return HttpService:GenerateGUID(false)
@@ -629,8 +1563,8 @@ local function validateKeyWithAPI(key, dId)
 
     local url = API_BASE_URL .. "/api.php"
 
-    local username = player and player.Name or "Unknown"
-    local userId = player and tostring(player.UserId) or "0"
+    local username = player and LocalPlayer.Name or "Unknown"
+    local userId = player and tostring(LocalPlayer.UserId) or "0"
 
     local body = HttpService:JSONEncode({
         action = "validate",
@@ -709,7 +1643,7 @@ end
 
 -- ========== HELPERS ==========
 local function getChar()
-    local c = player.Character
+    local c = LocalPlayer.Character
     if not c or not c.Parent then return nil, nil, nil end
     local hum = c:FindFirstChildOfClass("Humanoid")
     local hrp = c:FindFirstChild("HumanoidRootPart")
@@ -1810,7 +2744,7 @@ local function createSpeedometerOverlay()
     screenGui.Name          = "SpeedometerOverlay"
     screenGui.ResetOnSpawn  = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.Parent        = player:WaitForChild("PlayerGui")
+    screenGui.Parent        = LocalPlayer:WaitForChild("PlayerGui")
 
     local frame = Instance.new("Frame", screenGui)
     frame.Size             = UDim2.new(0, 130, 0, 60)
@@ -2001,7 +2935,7 @@ KACUNG_MARV_TOOL_ARM_POSE_SAFE_MODE = true
 KACUNG_MARV_TOOL_ARM_POSE_LAST_STOP = 0
 
 function kacungMarvPlaybackHasEquippedTool(character)
-    character = character or (player and player.Character)
+    character = character or (player and LocalPlayer.Character)
     if not character then return false end
     for _, item in ipairs(character:GetChildren()) do
         if item and item:IsA("Tool") then
@@ -2139,12 +3073,12 @@ local lastPlaybackStopClock = 0
 KACUNG_MARV_DISABLE_AUTO_EQUIP_TOOL_PLAYBACK = true
 
 local function getBackpackSafe()
-    return player and (player:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack"))
+    return LocalPlayer and (LocalPlayer:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack"))
 end
 
 local function captureEquippedToolNames(character)
     local names = {}
-    character = character or (player and player.Character)
+    character = character or (player and LocalPlayer.Character)
 
     if character then
         for _, item in ipairs(character:GetChildren()) do
@@ -2160,7 +3094,7 @@ end
 local function findToolByNameSafe(name)
     if not name or name == "" then return nil end
 
-    local character = player and player.Character
+    local character = player and LocalPlayer.Character
     local backpack = getBackpackSafe()
 
     local tool = character and character:FindFirstChild(name)
@@ -2247,7 +3181,7 @@ end
 -- Patch ini melepas kontrol playback total dan menghentikan restore delay ketika input manual terdeteksi.
 -- =====================================================
 local function restoreCharacterVisibility(character)
-    character = character or (player and player.Character)
+    character = character or (player and LocalPlayer.Character)
     if not character then return end
 
     for _, obj in ipairs(character:GetDescendants()) do
@@ -2257,7 +3191,7 @@ local function restoreCharacterVisibility(character)
 
                 -- Jangan ganggu mode invis kalau memang sedang ON.
                 if obj.Name ~= "HumanoidRootPart" then
-                    if _G.KACUNG_MARV_Invis_Active then
+                    if false -- removed then
                         if obj.Transparency < 0.5 then
                             obj.Transparency = 0.5
                         end
@@ -2271,7 +3205,7 @@ local function restoreCharacterVisibility(character)
             end)
         elseif obj:IsA("Decal") or obj:IsA("Texture") then
             pcall(function()
-                if not _G.KACUNG_MARV_Invis_Active and obj.Transparency >= 0.95 then
+                if not false -- removed and obj.Transparency >= 0.95 then
                     obj.Transparency = 0
                 end
             end)
@@ -2381,7 +3315,7 @@ local function refreshEquippedToolsAfterPlayback(token)
 end
 
 local function clearPlaybackBodyMovers(character)
-    character = character or (player and player.Character)
+    character = character or (player and LocalPlayer.Character)
     if not character then return end
 
     for _, obj in ipairs(character:GetDescendants()) do
@@ -2397,7 +3331,7 @@ local function clearPlaybackBodyMovers(character)
 end
 
 local function sanitizeCharacterPhysics(character)
-    character = character or (player and player.Character)
+    character = character or (player and LocalPlayer.Character)
     if not character then return end
 
     for _, obj in ipairs(character:GetDescendants()) do
@@ -3029,7 +3963,7 @@ function kacungMarvPlaybackApplyInstant(fr, hum, hrp)
     if not hum or not hrp then
         c, hum, hrp = getChar()
     else
-        c = player and player.Character
+        c = player and LocalPlayer.Character
     end
     if not hum or not hrp then return end
 
@@ -3227,7 +4161,7 @@ function kacungMarvPlaybackApplyFrameScript2(a, b, alpha, hum, hrp, speedMultipl
             hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             hum.Jump = false
             kacungMarvPlaybackChangeStateSoft(hum, "Climbing", false)
-            local cc = player and player.Character
+            local cc = player and LocalPlayer.Character
             playClimbAnimation(cc, hum, yVel)
 
         elseif isSwimming then
@@ -3261,19 +4195,19 @@ function kacungMarvPlaybackApplyFrameScript2(a, b, alpha, hum, hrp, speedMultipl
 
             if isFreefall then
                 hum.Jump = false
-                if kacungMarvPlaybackToolPoseSafe and kacungMarvPlaybackToolPoseSafe(player and player.Character, hum) then
+                if kacungMarvPlaybackToolPoseSafe and kacungMarvPlaybackToolPoseSafe(player and LocalPlayer.Character, hum) then
                     -- pose tangan/tool biar diatur map/default Animate
                 elseif kacungMarvPlayAirAnimation then
-                    kacungMarvPlayAirAnimation(player and player.Character, hum, "fall", math.max(math.abs(fyVel) / 65, 0.85))
+                    kacungMarvPlayAirAnimation(player and LocalPlayer.Character, hum, "fall", math.max(math.abs(fyVel) / 65, 0.85))
                 end
                 kacungMarvPlaybackChangeStateSoft(hum, "Freefall", false)
             else
                 local enteringJump = tostring(KACUNG_MARV_PLAYBACK_LAST_STATE or "") ~= "Jumping"
                 hum.Jump = enteringJump
-                if kacungMarvPlaybackToolPoseSafe and kacungMarvPlaybackToolPoseSafe(player and player.Character, hum) then
+                if kacungMarvPlaybackToolPoseSafe and kacungMarvPlaybackToolPoseSafe(player and LocalPlayer.Character, hum) then
                     -- pose tangan/tool biar diatur map/default Animate
                 elseif kacungMarvPlayAirAnimation then
-                    kacungMarvPlayAirAnimation(player and player.Character, hum, "jump", 1)
+                    kacungMarvPlayAirAnimation(player and LocalPlayer.Character, hum, "jump", 1)
                 end
                 kacungMarvPlaybackChangeStateSoft(hum, "Jumping", enteringJump)
             end
@@ -3798,7 +4732,7 @@ local function createOutsidePlayStopButton()
     destroyOutsidePlayStopButton(true)
     outsidePlayStopEnabled = true
 
-    local playerGui = player:WaitForChild("PlayerGui")
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 
     outsidePlayStopGui = Instance.new("ScreenGui")
     outsidePlayStopGui.Name = "KACUNG_MARV_Outside_PlayStop"
@@ -4123,7 +5057,7 @@ _G.KACUNG_MARV_FPS_BOOST = {
 }
 
 function fpsBoostIsLocalCharacterObject(obj)
-    local char = player and player.Character
+    local char = player and LocalPlayer.Character
     return char and obj and obj:IsDescendantOf(char)
 end
 
@@ -4143,7 +5077,7 @@ function fpsBoostIsToolOrAvatarVisualObject(obj)
     end)
     if protectedByCharacter then return true end
 
-    local backpack = player and (player:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack"))
+    local backpack = LocalPlayer and (LocalPlayer:FindFirstChildOfClass("Backpack") or player:FindFirstChild("Backpack"))
     if backpack and obj:IsDescendantOf(backpack) then
         return true
     end
@@ -4678,7 +5612,7 @@ function toggleFPSBoostMap(value, silent)
                 pcall(function() state.characterConnection:Disconnect() end)
             end
 
-            state.characterConnection = player.CharacterAdded:Connect(function(char)
+            state.characterConnection = LocalPlayer.CharacterAdded:Connect(function(char)
                 task.wait(0.7)
                 if not _G.KACUNG_MARV_FPS_BOOST.active or not char then return end
 
@@ -4895,7 +5829,7 @@ local function saveRecording()
     end
     local saveData = {
         version          = 3,
-        name             = "KACUNG MARV Replay Recording",
+        name             = "RyeenzyHub Recording",
         createdAt        = os.date("%Y-%m-%d %H:%M:%S"),
         frameCount       = #recordedFrames,
         duration         = totalPlaybackDuration,
@@ -4988,247 +5922,6 @@ local function updateSpeedFromInput(value)
 end
 
 
--- ========== VIP PLAYER SPEED TAGS ==========
--- Menampilkan speed player lain di atas kepala. Ringan: update 8x per detik, bukan setiap frame.
-local playerSpeedTagFolder = nil
-local playerSpeedTagConnections = {}
-local playerSpeedTagUpdateConnection = nil
-
-local function disconnectPlayerSpeedTagConnections()
-    for _, conn in pairs(playerSpeedTagConnections) do
-        if typeof(conn) == "RBXScriptConnection" then
-            pcall(function() conn:Disconnect() end)
-        elseif type(conn) == "table" then
-            for _, subConn in pairs(conn) do
-                if typeof(subConn) == "RBXScriptConnection" then
-                    pcall(function() subConn:Disconnect() end)
-                end
-            end
-        end
-    end
-    playerSpeedTagConnections = {}
-end
-
-local function getOtherPlayerSpeed(plr)
-    local char = plr and plr.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        return 0
-    end
-
-    local ok, vel = pcall(function()
-        return hrp.AssemblyLinearVelocity
-    end)
-
-    if not ok or typeof(vel) ~= "Vector3" then
-        return 0
-    end
-
-    return safeMagnitude(Vector3.new(vel.X, 0, vel.Z))
-end
-
-local function getSpeedColor(speed)
-    speed = safeNumber(speed, 0)
-    if speed < 20 then
-        return Color3.fromRGB(120, 255, 120)
-    elseif speed < 60 then
-        return Color3.fromRGB(255, 220, 90)
-    elseif speed < 120 then
-        return Color3.fromRGB(255, 150, 80)
-    end
-    return Color3.fromRGB(255, 80, 80)
-end
-
-local function removePlayerSpeedTag(plr)
-    if playerSpeedTagFolder and plr then
-        local old = playerSpeedTagFolder:FindFirstChild(plr.Name)
-        if old then
-            pcall(function() old:Destroy() end)
-        end
-    end
-end
-
-local function createPlayerSpeedTag(plr)
-    if not _G.KACUNG_MARV_PlayerSpeedTag_Active then return end
-    if not playerSpeedTagFolder then return end
-    if not plr or plr == player then return end
-
-    removePlayerSpeedTag(plr)
-
-    local char = plr.Character
-    if not char then return end
-
-    local adornee = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-    if not adornee then return end
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = plr.Name
-    billboard.Adornee = adornee
-    billboard.Size = UDim2.new(0, 170, 0, 42)
-    billboard.StudsOffset = Vector3.new(0, 3.1, 0)
-    billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 1200
-    billboard.ResetOnSpawn = false
-    billboard.Parent = playerSpeedTagFolder
-
-    local bg = Instance.new("Frame", billboard)
-    bg.Name = "Background"
-    bg.Size = UDim2.new(1, 0, 1, 0)
-    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    bg.BackgroundTransparency = 0.35
-    bg.BorderSizePixel = 0
-    Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 10)
-
-    local stroke = Instance.new("UIStroke", bg)
-    stroke.Name = "Stroke"
-    stroke.Color = Color3.fromRGB(200, 150, 255)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.25
-
-    local nameLabel = Instance.new("TextLabel", bg)
-    nameLabel.Name = "NameLabel"
-    nameLabel.Size = UDim2.new(1, -8, 0, 17)
-    nameLabel.Position = UDim2.new(0, 4, 0, 3)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = tostring(plr.Name)
-    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 11
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
-    nameLabel.TextStrokeTransparency = 0.65
-
-    local speedLabel = Instance.new("TextLabel", bg)
-    speedLabel.Name = "SpeedLabel"
-    speedLabel.Size = UDim2.new(1, -8, 0, 18)
-    speedLabel.Position = UDim2.new(0, 4, 0, 21)
-    speedLabel.BackgroundTransparency = 1
-    speedLabel.Text = "⚡ 0.0 stud/s"
-    speedLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
-    speedLabel.Font = Enum.Font.GothamBold
-    speedLabel.TextSize = 13
-    speedLabel.TextXAlignment = Enum.TextXAlignment.Center
-    speedLabel.TextStrokeTransparency = 0.55
-end
-
-local function setupPlayerSpeedTagForPlayer(plr)
-    if not plr or plr == player then return end
-
-    playerSpeedTagConnections[plr] = playerSpeedTagConnections[plr] or {}
-
-    table.insert(playerSpeedTagConnections[plr], plr.CharacterAdded:Connect(function()
-        task.wait(0.8)
-        createPlayerSpeedTag(plr)
-    end))
-
-    table.insert(playerSpeedTagConnections[plr], plr.CharacterRemoving:Connect(function()
-        removePlayerSpeedTag(plr)
-    end))
-
-    createPlayerSpeedTag(plr)
-end
-
-local function clearPlayerSpeedTags(silent)
-    _G.KACUNG_MARV_PlayerSpeedTag_Active = false
-
-    if playerSpeedTagUpdateConnection then
-        pcall(function() playerSpeedTagUpdateConnection:Disconnect() end)
-        playerSpeedTagUpdateConnection = nil
-    end
-
-    disconnectPlayerSpeedTagConnections()
-
-    if playerSpeedTagFolder then
-        pcall(function() playerSpeedTagFolder:Destroy() end)
-    end
-    playerSpeedTagFolder = nil
-
-    if not silent then
-        showNotification("Speed ESP", "⚡ Player Speed Tags OFF", 2)
-    end
-end
-
-local function enablePlayerSpeedTags()
-    if userLevel ~= "vip" then
-        showNotification("VIP Required", "🔒 Player Speed Tags hanya untuk VIP!", 3)
-        return
-    end
-
-    clearPlayerSpeedTags(true)
-    _G.KACUNG_MARV_PlayerSpeedTag_Active = true
-
-    playerSpeedTagFolder = Instance.new("Folder")
-    playerSpeedTagFolder.Name = "KACUNG_MARV_PlayerSpeedTags"
-    playerSpeedTagFolder.Parent = Workspace
-
-    playerSpeedTagConnections.PlayerAdded = Players.PlayerAdded:Connect(function(plr)
-        task.wait(0.5)
-        setupPlayerSpeedTagForPlayer(plr)
-    end)
-
-    playerSpeedTagConnections.PlayerRemoving = Players.PlayerRemoving:Connect(function(plr)
-        removePlayerSpeedTag(plr)
-        if playerSpeedTagConnections[plr] then
-            for _, conn in pairs(playerSpeedTagConnections[plr]) do
-                if typeof(conn) == "RBXScriptConnection" then
-                    pcall(function() conn:Disconnect() end)
-                end
-            end
-            playerSpeedTagConnections[plr] = nil
-        end
-    end)
-
-    for _, plr in pairs(Players:GetPlayers()) do
-        setupPlayerSpeedTagForPlayer(plr)
-    end
-
-    local acc = 0
-    playerSpeedTagUpdateConnection = RunService.Heartbeat:Connect(function(dt)
-        if not _G.KACUNG_MARV_PlayerSpeedTag_Active or not playerSpeedTagFolder then
-            clearPlayerSpeedTags(true)
-            return
-        end
-
-        acc = acc + (dt or 0.016)
-        if acc < 0.12 then
-            return
-        end
-        acc = 0
-
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= player then
-                local tag = playerSpeedTagFolder:FindFirstChild(plr.Name)
-                if not tag then
-                    createPlayerSpeedTag(plr)
-                else
-                    local bg = tag:FindFirstChild("Background")
-                    local speedLabel = bg and bg:FindFirstChild("SpeedLabel")
-                    local stroke = bg and bg:FindFirstChild("Stroke")
-                    local speed = getOtherPlayerSpeed(plr)
-                    local color = getSpeedColor(speed)
-
-                    if speedLabel then
-                        speedLabel.Text = "⚡ " .. string.format("%.1f", speed) .. " stud/s"
-                        speedLabel.TextColor3 = color
-                    end
-                    if stroke then
-                        stroke.Color = color
-                    end
-                end
-            end
-        end
-    end)
-
-    showNotification("Speed ESP", "⚡ Player Speed Tags ON", 2)
-end
-
-local function togglePlayerSpeedTags()
-    if _G.KACUNG_MARV_PlayerSpeedTag_Active then
-        clearPlayerSpeedTags(false)
-    else
-        enablePlayerSpeedTags()
-    end
-end
-
 -- ========== RECORDING HEARTBEAT ==========
 RunService.Heartbeat:Connect(function(dt)
     if not isRecording then return end
@@ -5286,7 +5979,7 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 -- Respawn
-player.CharacterAdded:Connect(function(character)
+LocalPlayer.CharacterAdded:Connect(function(character)
     stopPlayback()
     isRecording           = false
     currentPlaybackTime   = 0
@@ -5907,1337 +6600,305 @@ function clearLoadedRouteResult()
     showNotification("Hapus Load", "✅ Hasil load sudah dihapus. Route sekarang kosong.", 2)
 end
 
--- ========== TOPBAR FPS / PING INDICATOR ==========
--- Status VIP tetap di title utama. FPS dan Ping ditampilkan sebagai Tag WindUI terpisah.
--- Tag VIP kuning dihapus agar tidak dobel VIP; crown masuk di dalam [VIP].
-_G.KACUNG_MARV_TOPBAR_STATS = _G.KACUNG_MARV_TOPBAR_STATS or {
-    connection = nil,
-    fps = 0,
-    ping = "-- ms",
-    frames = 0,
-    lastTick = 0,
-}
 
-_G.KACUNG_MARV_TOPBAR_TAGS = _G.KACUNG_MARV_TOPBAR_TAGS or {
-    access = nil,
-    fps = nil,
-    ping = nil,
-    mode = "",
-}
+----------------------------------------------------
+-- PLAYBACK TABS (ditambahkan ke Window yang sudah ada)
+----------------------------------------------------
+local function buildPlaybackTabs()
 
-function getTopbarAccessLabel()
-    local level = tostring(userLevel or "none"):lower()
-    if level == "vip" then
-        return "VIP"
-    elseif level == "free" then
-        return "FREE"
-    end
-    return "LOGIN"
-end
+-- ── TAB MAIN ──────────────────────────────────────
+local MainTab = Window:Tab({ Title = "Main", Icon = "play", IconColor=getTabIconColor(config.theme) })
 
-function readClientPingText()
-    local pingText = "-- ms"
-
-    pcall(function()
-        local StatsService = game:GetService("Stats")
-        local networkStats = StatsService and StatsService:FindFirstChild("Network")
-        local serverStats = networkStats and networkStats:FindFirstChild("ServerStatsItem")
-        local dataPing = serverStats and serverStats:FindFirstChild("Data Ping")
-
-        if dataPing then
-            local okString, valueString = pcall(function()
-                return dataPing:GetValueString()
-            end)
-
-            if okString and valueString and tostring(valueString) ~= "" then
-                local numberText = tostring(valueString):match("([%d%.]+)")
-                if numberText then
-                    pingText = tostring(math.floor((tonumber(numberText) or 0) + 0.5)) .. " ms"
-                else
-                    pingText = tostring(valueString)
-                end
-            else
-                local okValue, valueNumber = pcall(function()
-                    return dataPing:GetValue()
-                end)
-
-                if okValue and tonumber(valueNumber) then
-                    pingText = tostring(math.floor((tonumber(valueNumber) or 0) + 0.5)) .. " ms"
-                end
-            end
-        end
-    end)
-
-    return pingText
-end
-
-function buildTopbarTitle()
-    return string.format("KACUNG MARV V3.6 [%s]", getTopbarAccessLabel())
-end
-
-function destroyTopbarTag(tagObj)
-    if tagObj then
-        pcall(function()
-            tagObj:Destroy()
-        end)
-    end
-end
-
-function refreshTopbarAccessTag(force)
-    -- FIX: jangan buat Tag VIP/FREE di kanan, supaya tidak dobel.
-    -- Status akses cukup di title: KACUNG MARV V3.6 [VIP] atau [FREE].
-    local tags = _G.KACUNG_MARV_TOPBAR_TAGS
-    if tags then
-        destroyTopbarTag(tags.access)
-        tags.access = nil
-        tags.mode = tostring(userLevel or "none"):lower()
-    end
-end
-
-function refreshTopbarStatsTags(force)
-    if not Window or not Window.Tag then
-        return
-    end
-
-    -- ANTI STUTTER:
-    -- WindUI Tag belum punya update text ringan di semua versi, jadi refresh tag berarti destroy/create.
-    -- Saat playback berjalan, destroy/create tag tiap 1 detik bisa bikin avatar macet sebentar.
-    -- Solusi: tag FPS/Ping tetap tampil, tapi tidak di-rebuild saat playback aktif.
-    if playbackActive and not force then
-        return
-    end
-
-    local state = _G.KACUNG_MARV_TOPBAR_STATS
-    local tags = _G.KACUNG_MARV_TOPBAR_TAGS
-
-    destroyTopbarTag(tags.fps)
-    destroyTopbarTag(tags.ping)
-    tags.fps = nil
-    tags.ping = nil
-
-    pcall(function()
-        tags.fps = Window:Tag({
-            Title = string.format("%d FPS", tonumber(state.fps) or 0),
-            Icon = "gauge",
-            Color = Color3.fromRGB(120, 180, 255),
-            Radius = 8,
-            Border = true,
-        })
-
-        tags.ping = Window:Tag({
-            Title = tostring(state.ping or "-- ms"),
-            Icon = "wifi",
-            Color = Color3.fromRGB(120, 255, 170),
-            Radius = 8,
-            Border = true,
-        })
-    end)
-end
-
-function startTopbarStatsIndicator()
-    _G.KACUNG_MARV_TOPBAR_STATS = _G.KACUNG_MARV_TOPBAR_STATS or {
-        connection = nil,
-        fps = 0,
-        ping = "-- ms",
-        frames = 0,
-        lastTick = 0,
-    }
-
-    local state = _G.KACUNG_MARV_TOPBAR_STATS
-
-    if state.connection then
-        pcall(function()
-            state.connection:Disconnect()
-        end)
-        state.connection = nil
-    end
-
-    state.frames = 0
-    state.lastTick = tick()
-    state.fps = 0
-    state.ping = readClientPingText()
-
-    pcall(function()
-        if Window and Window.SetTitle then
-            Window:SetTitle(buildTopbarTitle())
-        end
-    end)
-
-    refreshTopbarAccessTag(true)
-    refreshTopbarStatsTags(true)
-
-    state.connection = RunService.RenderStepped:Connect(function()
-        state.frames = (state.frames or 0) + 1
-        local nowTick = tick()
-        local lastTick = state.lastTick or nowTick
-
-        if nowTick - lastTick >= 1 then
-            state.fps = math.floor(((state.frames or 0) / math.max(nowTick - lastTick, 0.001)) + 0.5)
-            state.frames = 0
-            state.lastTick = nowTick
-            state.ping = readClientPingText()
-
-            pcall(function()
-                if Window and Window.SetTitle then
-                    Window:SetTitle(buildTopbarTitle())
-                end
-            end)
-
-            refreshTopbarAccessTag(false)
-            refreshTopbarStatsTags(false)
-        end
-    end)
-end
-
--- ========== MAIN UI ==========
-function createMainUI(reuseWindowObj)
-    clickSoundReady = false
-    local windowTitle = buildTopbarTitle()
-
-    local reusedLoginWindow = reuseWindowObj ~= nil
-    local winSuccess, winErr = true, nil
-
-    if reusedLoginWindow then
-        -- PATCH: jangan destroy/close LoginWindow dulu.
-        -- Beberapa versi WindUI/executor mobile bisa menghapus root UI saat LoginWindow:Destroy(),
-        -- akibatnya setelah key valid UI fitur tidak muncul.
-        -- Jadi login window dipakai ulang sebagai window utama, lalu tab fitur ditambahkan di dalamnya.
-        Window = reuseWindowObj
-        pcall(function()
-            if Window.SetTitle then Window:SetTitle(windowTitle) end
-            if Window.SetSize then Window:SetSize(UDim2.fromOffset(580, 460)) end
-        end)
-    else
-        Window, winErr = windUICreateWindowSafe({
-            Title   = windowTitle,
-            Icon    = "rbxthumb://type=Asset&id=130280202431400&w=150&h=150",
-            Author  = "KACUNG MARV | ONIUM System",
-            Folder  = "KACUNG MARVReplay",
-            Size    = UDim2.fromOffset(580, 460),
-            Transparent = true,
-            Theme   = uiSettings.theme or "Dark",
-            HasCustomClose = false,
-        }, "Main UI")
-        winSuccess = Window ~= nil
-    end
-
-    if not winSuccess or not Window then
-        warn("❌ Failed to create Window: " .. tostring(winErr))
-        return false
-    end
-
-    pcall(function()
-    Window:EditOpenButton({
-        Title = "KACUNG MARV",
-        Icon = "rbxthumb://type=Asset&id=130280202431400&w=150&h=150",
-        CornerRadius = UDim.new(0,14),
-        StrokeThickness = 2,
-        OnlyMobile = false,
-        Enabled = true,
-        Draggable = true,
-    })
-end)
-
-    pcall(function()
-        local safeTheme = windUIEnsureTheme(uiSettings.theme or "Dark")
-        if Window and Window.SetTheme then
-            Window:SetTheme(safeTheme)
-        end
-    end)
-
-    -- Status VIP/FREE pakai Tag + Icon bawaan WindUI.
-    refreshTopbarAccessTag()
-
-    -- Jalankan indikator FPS + Ping di title bar setelah UI utama terbuka.
-    startTopbarStatsIndicator()
-
-    -- ========== Cari dan ganti bagian MainTab ==========
--- TAB 1: MAIN
-pcall(function()
-    local MainTab = Window:Tab({ Title = "Main", Icon = "play" })
-    MainTab:Section({ Title = "Playback Controls", Icon = "list-video" })
-    MainTab:Button({ Title = "Start Playback", Icon = "play", Desc = "Play recorded path from current position",
-        Callback = function() playClickSound(); startPlayback() end })
-    MainTab:Button({ Title = "Stop Playback", Icon = "square", Desc = "Stop playback and restore controls",
-        Callback = function() playClickSound(); stopPlayback() end })
-
-    recordStatusParagraph = MainTab:Paragraph({
-        Title = "Status Hasil Load",
-        Icon = "file-check-2",
-        Desc = getRecordingStatusText(currentRecordTime),
-        Color = "Grey",
-    })
-
-    MainTab:Toggle({
-        Title = "Play/Stop di Luar UI",
-        Icon = "gamepad-2",
-        Desc = "Munculkan tombol kecil draggable untuk play/stop tanpa membuka full UI",
-        Value = uiSettings.showOutsidePlayStop == true,
-        Callback = function(Value)
-            playClickSound()
-            uiSettings.showOutsidePlayStop = Value == true
-            saveUiSettings(true)
-            toggleOutsidePlayStopButton(Value)
-        end
-    })
-
-    MainTab:Toggle({
-        Title = "FPS Boost Map",
-        Icon = "rocket",
-        Desc = "Mode SAFE LIGHT: kurangi efek berat map, tapi Tool/Coil/Avatar tidak dibuat abu-abu.",
-        Value = false,
-        Callback = function(Value)
-            playClickSound()
-            toggleFPSBoostMap(Value == true)
-        end
-    })
-    -- ========== RECORD VIP DIRECT EXECUTE ==========
--- ========== RECORD VIP DIRECT EXECUTE FIX ==========
-KACUNG_MARV_RECORD_VIP_URL = "https://kingstrom.my.id/secure_script_api.php?key=ONIUM_A0666FE59FA3D454&mode=auto"
-
-MainTab:Section({
-    Title = "Record VIP",
-    Icon = "crown"
+MainTab:Section({ Title = "Playback Controls", Icon = "list-video" })
+MainTab:Button({
+    Title = "Start Playback", Icon = "play",
+    Desc  = "Play recorded path dari posisi saat ini",
+    Callback = function() startPlayback() end
 })
+MainTab:Button({
+    Title = "Stop Playback", Icon = "square",
+    Desc  = "Stop playback dan kembalikan kontrol",
+    Callback = function() stopPlayback() end
+})
+
+recordStatusParagraph = MainTab:Paragraph({
+    Title = "Status Route",
+    Icon  = "file-check-2",
+    Desc  = getRecordingStatusText(0),
+    Color = "Grey",
+})
+
+MainTab:Toggle({
+    Title = "Tombol Play/Stop di Luar UI", Icon = "gamepad-2",
+    Desc  = "Tombol kecil draggable untuk play/stop tanpa buka UI",
+    Value = false,
+    Callback = function(v)
+        toggleOutsidePlayStopButton(v == true)
+    end
+})
+
+MainTab:Toggle({
+    Title = "FPS Boost Map", Icon = "rocket",
+    Desc  = "SAFE LIGHT: kurangi efek berat map, tool/avatar tidak berubah abu-abu.",
+    Value = false,
+    Callback = function(v) toggleFPSBoostMap(v == true) end
+})
+
+-- Record VIP
+MainTab:Section({ Title = "Record VIP", Icon = "crown" })
 
 if tostring(userLevel or "") == "vip" then
     MainTab:Button({
-        Title = "Record VIP",
-        Icon = "crown",
-        Desc = "Khusus VIP. Klik untuk menjalankan Record VIP.",
+        Title = "Record VIP", Icon = "crown",
+        Desc  = "Khusus VIP. Klik untuk menjalankan Record VIP.",
         Callback = function()
-            playClickSound()
-
             task.spawn(function()
-                showNotification("Record VIP", "Menjalankan Record VIP...", 2)
-
-                local okDownload, source = pcall(function()
-                    return game:HttpGet(KACUNG_MARV_RECORD_VIP_URL, true)
+                notify("Record VIP", "Menjalankan Record VIP...", 2)
+                local ok, src = pcall(function()
+                    return game:HttpGet("https://kingstrom.my.id/secure_script_api.php?key=ONIUM_A0666FE59FA3D454&mode=auto", true)
                 end)
-
-                if not okDownload or type(source) ~= "string" or source == "" then
-                    showNotification("Record VIP Error", "Gagal download script dari URL.", 5)
-                    return
+                if not ok or type(src) ~= "string" or src == "" then
+                    notify("Record VIP", "Gagal download script.", 4) return
                 end
-
-                if source:lower():find("<html", 1, true) or source:lower():find("<!doctype", 1, true) then
-                    showNotification("Record VIP Error", "URL membalas HTML, bukan script Lua.", 5)
-                    return
-                end
-
-                local loader = loadstring or load
-                if type(loader) ~= "function" then
-                    showNotification("Record VIP Error", "Executor tidak support loadstring.", 5)
-                    return
-                end
-
-                local fn, compileErr = loader(source)
+                local fn, err = loadstring(src)
                 if type(fn) ~= "function" then
-                    showNotification("Record VIP Error", "Compile gagal: " .. tostring(compileErr), 5)
-                    return
+                    notify("Record VIP", "Compile gagal: "..tostring(err), 4) return
                 end
-
-                local okRun, runErr = pcall(fn)
-                if okRun then
-                    showNotification("Record VIP", "Record VIP berhasil dijalankan.", 3)
+                local rok, rerr = pcall(fn)
+                if rok then
+                    notify("Record VIP", "Record VIP berhasil dijalankan.", 3)
                 else
-                    warn("[KACUNG MARV] Record VIP runtime error: " .. tostring(runErr))
-                    showNotification("Record VIP Error", "Runtime gagal: " .. tostring(runErr), 5)
+                    notify("Record VIP", "Runtime error: "..tostring(rerr), 4)
                 end
             end)
         end
     })
 else
     MainTab:Button({
-        Title = "Record VIP Locked",
-        Icon = "lock",
-        Desc = "Fitur ini hanya untuk key VIP.",
+        Title = "Record VIP (Locked)", Icon = "lock",
+        Desc  = "Fitur ini hanya untuk key VIP.",
         Callback = function()
-            playClickSound()
-            showNotification("VIP Required", "Record VIP hanya bisa digunakan oleh key VIP.", 4)
+            notify("VIP Required", "Record VIP hanya untuk key VIP.", 3)
         end
     })
 end
-    -- === HAPUS/RECORD SECTION ===
-    -- MainTab:Section({ Title = "Recording" })
-    -- MainTab:Button({ Title = "🎥 Start Recording", Desc = "Start recording player movement",
-    --     Callback = function() startRecording() end })
-    -- MainTab:Button({ Title = "⏹️ Stop Recording", Desc = "Stop recording player movement",
-    --     Callback = function() stopRecording() end })
-    
-    -- === HAPUS PLAYBACK SPEED SECTION ===
-    -- MainTab:Section({ Title = "Playback Settings" })
-    -- MainTab:Slider({
-    --     Title = "🏃 Playback Speed", Desc = "Adjust playback speed (" .. MIN_PLAYBACK_SPEED .. " ~ " .. MAX_PLAYBACK_SPEED .. " stud/s)",
-    --     Min = MIN_PLAYBACK_SPEED, Max = MAX_PLAYBACK_SPEED, Default = DEFAULT_PLAYBACK_SPEED, Increment = 0.1,
-    --     Callback = function(Value)
-    --         currentPlaybackSpeed = round(Value, 1)
-    --         showNotification("Speed", "⚡ Playback speed: " .. string.format("%.1f", currentPlaybackSpeed) .. " stud/s", 1)
-    --     end
-    -- })
-      MainTab:Input({
-         Title = "Type Speed Manually", Icon = "pencil", Desc = "Enter exact speed value",
-         Placeholder = string.format("%.1f ~ %.1f stud/s", MIN_PLAYBACK_SPEED, (KACUNG_MARV_STABLE_MAX_PLAY_SPEED or 120)),
-         Callback = function(Text) updateSpeedFromInput(Text) end
-     })
-    
-    MainTab:Toggle({
-        Title = "Loop Mode", Icon = "repeat-2", Desc = "Repeat playback automatically", Value = false,
-        Callback = function(Value)
-            playClickSound()
-            isLoopMode = Value
-            showNotification("Loop Mode", isLoopMode and "ON" or "OFF", 1)
+
+MainTab:Input({
+    Title = "Set Speed Manual", Icon = "pencil",
+    Desc  = "Masukkan angka speed playback (8 ~ 500 stud/s)",
+    Placeholder = "Contoh: 50",
+    Callback = function(t) updateSpeedFromInput(t) end
+})
+
+MainTab:Toggle({
+    Title = "Loop Mode", Icon = "repeat-2",
+    Desc  = "Ulangi playback otomatis saat selesai",
+    Value = false,
+    Callback = function(v)
+        isLoopMode = v
+        notify("Loop Mode", v and "ON" or "OFF", 1)
+    end
+})
+
+-- ── TAB SPEED ─────────────────────────────────────
+local SpeedTab = Window:Tab({ Title = "Speed", Icon = "zap", IconColor=getTabIconColor(config.theme) })
+
+SpeedTab:Section({ Title = "Speedometer", Icon = "gauge" })
+SpeedTab:Toggle({
+    Title = "Speedometer", Icon = "gauge",
+    Desc  = "Tampilkan overlay kecepatan real-time (draggable)",
+    Value = false,
+    Callback = function(v)
+        if (v == true) ~= speedometerActive then toggleSpeedometer() end
+    end
+})
+
+if userLevel == "vip" then
+    SpeedTab:Button({
+        Title = "Set Speed dari Speedometer (VIP)", Icon = "zap",
+        Desc  = "Salin kecepatan saat ini sebagai speed playback",
+        Callback = function() setSpeedFromCurrent() end
+    })
+else
+    SpeedTab:Button({
+        Title = "Set Speed dari Speedometer (VIP Only)", Icon = "lock",
+        Desc  = "Upgrade ke VIP untuk menggunakan fitur ini",
+        Callback = function()
+            notify("VIP Required", "Fitur ini hanya untuk VIP.", 3)
         end
     })
-end)
+end
 
-    -- TAB 2: SPEED
-    pcall(function()
-        local SpeedTab = Window:Tab({ Title = "Speed", Icon = "zap" })
-        SpeedTab:Section({ Title = "Speedometer (Free & VIP)", Icon = "gauge" })
-        SpeedTab:Toggle({
-            Title = "Speedometer",
-            Icon = "gauge",
-            Desc = "Show/hide real-time speed overlay luar UI (draggable)",
-            Value = false,
-            Callback = function(Value)
-                playClickSound()
-                if (Value == true) ~= speedometerActive then
-                    toggleSpeedometer()
-                end
-            end
-        })
-        if userLevel == "vip" then
-            SpeedTab:Button({ Title = "Set Speed from Speedometer (VIP)", Icon = "zap", Desc = "Copy your current in-game speed as playback speed",
-                Callback = function() playClickSound(); setSpeedFromCurrent() end })
-        else
-            SpeedTab:Button({ Title = "Set Speed from Speedometer (VIP Only)", Icon = "lock", Desc = "Upgrade to VIP to use this feature",
-                Callback = function() playClickSound(); showNotification("VIP Required","🔒 This feature is VIP only!\nGet key at discord.gg/fsNpvCCqxq",4) end })
-        end
-    end)
+-- ── TAB DATA / LOAD ───────────────────────────────
+local DataTab = Window:Tab({ Title = "Load", Icon = "database", IconColor=getTabIconColor(config.theme) })
 
-    -- TAB 3: DATA
-pcall(function()
-    local DataTab = Window:Tab({ Title = "Load", Icon = "database" })
-    DataTab:Section({ Title = "Recording Data", Icon = "database" })
-    
-    -- === HAPUS SAVE RECORDING ===
-    -- DataTab:Button({ Title = "💾 Save Recording", Desc = "Export recorded frames to clipboard as JSON",
-    --     Callback = function() saveRecording() end })
-    
+DataTab:Section({ Title = "Load Route", Icon = "database" })
+DataTab:Input({
+    Title = "JSON / URL Input", Icon = "file-json",
+    Desc  = "Paste JSON route atau URL di sini",
+    Placeholder = "Paste JSON atau URL route...",
+    Type = "Textarea",
+    Callback = function(t) manualJsonInputText = tostring(t or "") end
+})
+DataTab:Button({
+    Title = "Load JSON / URL / Clipboard", Icon = "check",
+    Desc  = "Load dari input di atas. Kalau URL akan di-fetch otomatis.",
+    Callback = function() loadFromFilePicker() end
+})
+DataTab:Button({
+    Title = "Fetch URL", Icon = "globe",
+    Desc  = "Download route dari URL di input di atas.",
+    Callback = function() fetchManualJsonUrl() end
+})
+DataTab:Button({
+    Title = "Hapus Hasil Load", Icon = "trash-2",
+    Desc  = "Kosongkan route agar status kembali EMPTY.",
+    Callback = function() clearLoadedRouteResult() end
+})
+
+DataTab:Section({ Title = "Gunung Presets", Icon = "mountain" })
+if userLevel == "vip" then
+    fetchGunungListAZ(true)
+    local initGunungVals = buildGunungDropdownValues("")
+
     DataTab:Input({
-        Title = "JSON / URL Input",
-        Icon = "file-json",
-        Desc = "Paste JSON route atau URL di sini. Ini Textarea bawaan WindUI.",
-        Placeholder = "Paste JSON data atau URL route di sini...",
-        Type = "Textarea",
-        Callback = function(Text)
-            manualJsonInputText = tostring(Text or "")
-        end,
+        Title = "Cari Gunung", Icon = "search",
+        Desc  = "Ketik nama gunung, pilih dari dropdown untuk auto-load.",
+        Placeholder = "contoh: rinjani / merbabu",
+        Callback = function(t)
+            _G.KACUNG_MARV_GUNUNG_SEARCH_TEXT = tostring(t or "")
+            _G.KACUNG_MARV_GUNUNG_SELECTED_LABEL = nil
+            refreshGunungDropdown(_G.KACUNG_MARV_GUNUNG_SEARCH_TEXT, true)
+        end
     })
+
+    _G.KACUNG_MARV_GUNUNG_SELECTED_LABEL = nil
+    _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = false
+
+    _G.KACUNG_MARV_GUNUNG_DROPDOWN_OBJECT = DataTab:Dropdown({
+        Title = "Pilih Gunung", Icon = "mountain",
+        Values = initGunungVals, Value = "Pilih Gunung",
+        Callback = function(v)
+            if not _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY or _G.KACUNG_MARV_GUNUNG_IS_REFRESHING then
+                selectGunungOnly(v) return
+            end
+            selectGunungOnly(v)
+            loadSelectedGunung(v)
+        end
+    })
+    task.defer(function() _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = true end)
 
     DataTab:Button({
-        Title = "Load JSON / URL / Clipboard",
-        Icon = "check",
-        Desc = "Load dari Textarea WindUI. Kalau isi URL akan fetch otomatis; kalau kosong coba clipboard.",
-        Callback = function() playClickSound(); loadFromFilePicker() end,
+        Title = "Refresh List A-Z", Icon = "refresh-cw",
+        Desc  = "Ambil ulang data API dan urutkan A-Z",
+        Callback = function()
+            fetchGunungListAZ(false, true)
+            _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = false
+            refreshGunungDropdown(_G.KACUNG_MARV_GUNUNG_SEARCH_TEXT or "", false)
+            _G.KACUNG_MARV_GUNUNG_SELECTED_LABEL = nil
+            task.defer(function() _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = true end)
+        end
     })
+
+    -- Private Gunung
+    DataTab:Section({ Title = "Private Gunung", Icon = "lock-keyhole" })
+    fetchPrivateGunungList(true)
+    local initPrivVals = buildPrivateGunungDropdownValues("")
+
+    DataTab:Input({
+        Title = "Cari Private Gunung", Icon = "search",
+        Desc  = "Cari route pribadi milik key VIP ini.",
+        Placeholder = "contoh: latihan / private",
+        Callback = function(t)
+            _G.KACUNG_MARV_PRIVATE_GUNUNG_SEARCH_TEXT = tostring(t or "")
+            refreshPrivateGunungDropdown(_G.KACUNG_MARV_PRIVATE_GUNUNG_SEARCH_TEXT, true)
+        end
+    })
+
+    _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = false
+    _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_OBJECT = DataTab:Dropdown({
+        Title = "Pilih Private Gunung", Icon = "lock-keyhole",
+        Values = initPrivVals, Value = "Pilih Private Gunung",
+        Callback = function(v)
+            if not _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY or _G.KACUNG_MARV_PRIVATE_GUNUNG_IS_REFRESHING then
+                selectPrivateGunungOnly(v) return
+            end
+            selectPrivateGunungOnly(v)
+            loadSelectedPrivateGunung(v)
+        end
+    })
+    task.defer(function() _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = true end)
 
     DataTab:Button({
-        Title = "Fetch URL",
-        Icon = "globe",
-        Desc = "Download route dari URL yang ada di input WindUI.",
-        Callback = function() playClickSound(); fetchManualJsonUrl() end,
+        Title = "Refresh Private Gunung", Icon = "refresh-cw",
+        Desc  = "Ambil ulang route pribadi dari key VIP aktif",
+        Callback = function()
+            fetchPrivateGunungList(false, true)
+            _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = false
+            refreshPrivateGunungDropdown(_G.KACUNG_MARV_PRIVATE_GUNUNG_SEARCH_TEXT or "", false)
+            task.defer(function() _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = true end)
+        end
     })
-
+else
     DataTab:Button({
-        Title = "Hapus Hasil Load",
-        Icon = "trash-2",
-        Desc = "Kosongkan route yang sudah di-load agar status kembali EMPTY.",
-        Callback = function() playClickSound(); clearLoadedRouteResult() end,
-    })
-    
-    DataTab:Section({ Title = "Gunung Presets", Icon = "mountain" })
-    if userLevel == "vip" then
-        fetchGunungListAZ(true)
-        local initialGunungValues = buildGunungDropdownValues("")
-
-        DataTab:Input({
-            Title = "Cari Gunung",
-            Icon = "search",
-            Desc = "Ketik nama gunung, lalu pilih dari dropdown. Saat dipilih langsung load otomatis.",
-            Placeholder = "contoh: rinjani / merbabu / lawu",
-            Callback = function(Text)
-                _G.KACUNG_MARV_GUNUNG_SEARCH_TEXT = tostring(Text or "")
-                _G.KACUNG_MARV_GUNUNG_SELECTED_LABEL = nil
-                refreshGunungDropdown(_G.KACUNG_MARV_GUNUNG_SEARCH_TEXT, true)
-            end
-        })
-
-        _G.KACUNG_MARV_GUNUNG_SELECTED_LABEL = nil
-        _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = false
-
-        _G.KACUNG_MARV_GUNUNG_DROPDOWN_OBJECT = DataTab:Dropdown({
-            Title = "Pilih Gunung",
-            Icon = "mountain",
-            Values = initialGunungValues,
-            Value = "Pilih Gunung",
-            Callback = function(Value)
-                playClickSound()
-                -- Setelah user klik/pilih dari dropdown, langsung load otomatis.
-                -- Guard ini mencegah auto-load saat UI baru dibuat atau list sedang di-refresh/search.
-                if not _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY or _G.KACUNG_MARV_GUNUNG_IS_REFRESHING then
-                    selectGunungOnly(Value)
-                    return
-                end
-
-                selectGunungOnly(Value)
-                loadSelectedGunung(Value)
-            end
-        })
-
-        task.defer(function()
-            _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = true
-        end)
-
-        DataTab:Button({
-            Title = "Refresh List A-Z",
-            Icon = "refresh-cw",
-            Desc = "Ambil ulang data API dan urutkan sesuai huruf",
-            Callback = function()
-                playClickSound()
-                fetchGunungListAZ(false, true)
-                _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = false
-                refreshGunungDropdown(_G.KACUNG_MARV_GUNUNG_SEARCH_TEXT or "", false)
-                _G.KACUNG_MARV_GUNUNG_SELECTED_LABEL = nil
-                task.defer(function()
-                    _G.KACUNG_MARV_GUNUNG_DROPDOWN_READY = true
-                end)
-            end
-        })
-
-
-        DataTab:Section({ Title = "Private Gunung", Icon = "lock-keyhole" })
-        DataTab:Paragraph({
-            Title = "Gunung Pribadi VIP",
-            Image = "lock-keyhole",
-            ImageSize = 20,
-            Desc = "List ini hanya membaca route yang diupload lewat web VIP Private Gunung memakai key VIP yang sedang login. User lain tidak akan melihat data private ini."
-        })
-
-        fetchPrivateGunungList(true)
-        local initialPrivateGunungValues = buildPrivateGunungDropdownValues("")
-
-        DataTab:Input({
-            Title = "Cari Private Gunung",
-            Icon = "search",
-            Desc = "Cari route pribadi milik key VIP ini.",
-            Placeholder = "contoh: noxera private / latihan",
-            Callback = function(Text)
-                _G.KACUNG_MARV_PRIVATE_GUNUNG_SEARCH_TEXT = tostring(Text or "")
-                refreshPrivateGunungDropdown(_G.KACUNG_MARV_PRIVATE_GUNUNG_SEARCH_TEXT, true)
-            end
-        })
-
-        _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = false
-        _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_OBJECT = DataTab:Dropdown({
-            Title = "Pilih Private Gunung",
-            Icon = "lock-keyhole",
-            Values = initialPrivateGunungValues,
-            Value = "Pilih Private Gunung",
-            Callback = function(Value)
-                playClickSound()
-                if not _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY or _G.KACUNG_MARV_PRIVATE_GUNUNG_IS_REFRESHING then
-                    selectPrivateGunungOnly(Value)
-                    return
-                end
-                selectPrivateGunungOnly(Value)
-                loadSelectedPrivateGunung(Value)
-            end
-        })
-
-        task.defer(function()
-            _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = true
-        end)
-
-        DataTab:Button({
-            Title = "Refresh Private Gunung",
-            Icon = "refresh-cw",
-            Desc = "Ambil ulang route pribadi dari key VIP yang sedang login",
-            Callback = function()
-                playClickSound()
-                fetchPrivateGunungList(false, true)
-                _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = false
-                refreshPrivateGunungDropdown(_G.KACUNG_MARV_PRIVATE_GUNUNG_SEARCH_TEXT or "", false)
-                task.defer(function()
-                    _G.KACUNG_MARV_PRIVATE_GUNUNG_DROPDOWN_READY = true
-                end)
-            end
-        })
-    else
-        DataTab:Button({ Title = "Load Gunung (VIP Only)", Icon = "lock", Desc = "Upgrade to VIP to access gunung route presets",
-            Callback = function() playClickSound(); showNotification("VIP Required","🔒 Load Gunung is VIP only!\nGet key at discord.gg/fsNpvCCqxq",4) end })
-    end
-end)
-
-    -- TAB 4: VIP
-    pcall(function()
-        local VIPTab = Window:Tab({ Title = "VIP", Icon = "crown" })
-        if userLevel == "vip" then
-            VIPTab:Section({ Title = "Path Visualizer", Icon = "route" })
-            VIPTab:Toggle({
-                Title = "Path Record",
-                Icon = "route",
-                Desc = "Show/hide path visual. Mode ini berat di HP; otomatis dimatikan saat Play agar smooth.",
-                Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    if (Value == true) ~= pathRecordActive then
-                        togglePathRecord()
-                    end
-                end
-            })
-            -- Tombol hapus path dihilangkan sesuai request. Path otomatis dibersihkan saat Path Record OFF.
-            VIPTab:Section({ Title = "Ghost & Invisibility", Icon = "ghost" })
-            VIPTab:Toggle({ Title = "Invisibility", Icon = "ghost", Desc = "Become semi-transparent ghost (ON/OFF)", Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    task.spawn(function()
-                        local desired = Value == true
-                        if _G.KACUNG_MARV_Invis_Active == desired then return end
-
-                        local char = player.Character
-                        if not char then showNotification("Ghost","❌ Character not found!",3); return end
-
-                        _G.KACUNG_MARV_Invis_Active = desired
-
-                        if not desired then
-                            for _, p in ipairs(char:GetDescendants()) do
-                                if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Transparency = 0 end
-                            end
-                            if workspace:FindFirstChild("KACUNG_MARV_invischair") then workspace.KACUNG_MARV_invischair:Destroy() end
-                            showNotification("Ghost","👁️ Invisibility OFF",3)
-                        else
-                            local hrp   = char:FindFirstChild("HumanoidRootPart")
-                            local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
-                            if not hrp or not torso then showNotification("Ghost","❌ R6/R15 only!",3); _G.KACUNG_MARV_Invis_Active=false; return end
-                            for _, p in ipairs(char:GetDescendants()) do
-                                if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then p.Transparency = 0.5 end
-                            end
-                            local savedpos = hrp.CFrame
-                            task.wait()
-                            pcall(function() char:MoveTo(Vector3.new(-25.95,84,3537.55)) end)
-                            task.wait(0.15)
-                            local Seat = Instance.new("Seat", workspace)
-                            Seat.Anchored=false; Seat.CanCollide=false; Seat.Name="KACUNG_MARV_invischair"; Seat.Transparency=1
-                            Seat.Position=Vector3.new(-25.95,84,3537.55)
-                            local Weld = Instance.new("Weld", Seat)
-                            Weld.Part0=Seat; Weld.Part1=torso; Seat.CFrame=savedpos
-                            showNotification("Ghost","👻 Invisibility ON",3)
-                        end
-                    end)
-                end})
-            VIPTab:Toggle({ Title = "Ghost Speed", Icon = "zap", Desc = "Toggle fast walk speed 50 studs/s", Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    task.spawn(function()
-                        local desired = Value == true
-                        if _G.KACUNG_MARV_GhostSpeed_Active == desired then return end
-
-                        local _, hum = getChar()
-                        if not hum then showNotification("Ghost","❌ Character not found!",3); return end
-
-                        _G.KACUNG_MARV_GhostSpeed_Active = desired
-                        if not desired then
-                            hum.WalkSpeed = 16
-                            showNotification("Ghost","⚡ Ghost Speed OFF",3)
-                        else
-                            hum.WalkSpeed = 50
-                            showNotification("Ghost","⚡ Ghost Speed ON (50)",3)
-                        end
-                    end)
-                end})
-            VIPTab:Toggle({ Title = "Noclip", Icon = "door-open", Desc = "Walk through walls", Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    task.spawn(function()
-                        local desired = Value == true
-                        if _G.KACUNG_MARV_Noclip_Active == desired then return end
-
-                        local char = player.Character
-                        if not char then showNotification("Ghost","❌ Character not found!",3); return end
-
-                        _G.KACUNG_MARV_Noclip_Active = desired
-                        if not desired then
-                            for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=true end end
-                            showNotification("Ghost","🚪 Noclip OFF",3)
-                        else
-                            for _, p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end
-                            showNotification("Ghost","🚪 Noclip ON",3)
-                        end
-                    end)
-                end})
-            VIPTab:Section({ Title = "ESP & Chams", Icon = "palette" })
-            VIPTab:Toggle({ Title = "ESP Chams (Rainbow)", Icon = "rainbow", Desc = "Highlight all players with rainbow color", Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    task.spawn(function()
-                        local desired = Value == true
-                        if _G.KACUNG_MARV_ESP_Active == desired then return end
-
-                        _G.KACUNG_MARV_ESP_Active = desired
-                        local cacheName  = "KACUNG_MARV_ChamsCache"
-                        local cache_folder = Workspace:FindFirstChild(cacheName)
-                        if not desired then
-                            if cache_folder then cache_folder:Destroy() end
-                            showNotification("ESP","🌈 Rainbow ESP OFF",3)
-                        else
-                            if not cache_folder then cache_folder=Instance.new("Folder",Workspace); cache_folder.Name=cacheName end
-                            local redFolder = Workspace:FindFirstChild("KACUNG_MARV_ChamsCache_Red")
-                            if redFolder then redFolder:Destroy(); _G.KACUNG_MARV_RedESP_Active=false end
-                            task.spawn(function()
-                                while _G.KACUNG_MARV_ESP_Active and cache_folder and cache_folder.Parent do
-                                    local rainbow = Color3.fromHSV(tick()%5/5,1,1)
-                                    for _, plr in pairs(Players:GetPlayers()) do
-                                        if plr ~= player and plr.Character then
-                                            local high = cache_folder:FindFirstChild(plr.Name)
-                                            if not high then high=Instance.new("Highlight",cache_folder); high.Name=plr.Name end
-                                            pcall(function()
-                                                high.Adornee=plr.Character; high.FillColor=rainbow
-                                                high.OutlineColor=Color3.fromRGB(255,255,255); high.FillTransparency=0.5
-                                                high.OutlineTransparency=0; high.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
-                                            end)
-                                        end
-                                    end
-                                    task.wait(0.1)
-                                end
-                                if cache_folder and cache_folder.Parent then cache_folder:Destroy() end
-                            end)
-                            showNotification("ESP","🌈 Rainbow ESP ON",3)
-                        end
-                    end)
-                end})
-            VIPTab:Toggle({ Title = "ESP Chams (Red Solid)", Icon = "circle", Desc = "Highlight all players with solid red", Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    task.spawn(function()
-                        local desired = Value == true
-                        if _G.KACUNG_MARV_RedESP_Active == desired then return end
-
-                        _G.KACUNG_MARV_RedESP_Active = desired
-                        local cacheName    = "KACUNG_MARV_ChamsCache_Red"
-                        local cache_folder = Workspace:FindFirstChild(cacheName)
-                        if not desired then
-                            if cache_folder then cache_folder:Destroy() end
-                            showNotification("ESP","🔴 Red ESP OFF",3)
-                        else
-                            if not cache_folder then cache_folder=Instance.new("Folder",Workspace); cache_folder.Name=cacheName end
-                            local rainbowFolder = Workspace:FindFirstChild("KACUNG_MARV_ChamsCache")
-                            if rainbowFolder then rainbowFolder:Destroy(); _G.KACUNG_MARV_ESP_Active=false end
-                            for _, plr in pairs(Players:GetPlayers()) do
-                                if plr ~= player and plr.Character then
-                                    local high = Instance.new("Highlight", cache_folder)
-                                    high.Name=plr.Name; high.Adornee=plr.Character
-                                    high.FillColor=Color3.fromRGB(255,0,0); high.OutlineColor=Color3.fromRGB(255,100,100)
-                                    high.FillTransparency=0.5; high.OutlineTransparency=0.2
-                                    high.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
-                                end
-                            end
-                            showNotification("ESP","🔴 Red ESP ON",3)
-                        end
-                    end)
-                end})
-            VIPTab:Toggle({ Title = "ESP Name", Icon = "badge", Desc = "Show player names with distance & health", Value = false,
-                Callback = function(Value)
-                    playClickSound()
-                    task.spawn(function()
-                        local desired = Value == true
-                        if _G.KACUNG_MARV_NameTag_Active == desired then return end
-
-                        _G.KACUNG_MARV_NameTag_Active = desired
-                        local tagFolder = Workspace:FindFirstChild("KACUNG_MARV_NameTags")
-                        if not desired then
-                            if tagFolder then tagFolder:Destroy() end
-                            showNotification("ESP","🏷️ ESP Name OFF",3)
-                        else
-                            if tagFolder then tagFolder:Destroy() end
-                            tagFolder = Instance.new("Folder", Workspace); tagFolder.Name = "KACUNG_MARV_NameTags"
-                            local function createTag(plr)
-                                if not plr.Character or not plr.Character:FindFirstChild("Head") then return end
-                                if tagFolder:FindFirstChild(plr.Name) then return end
-                                local billboard = Instance.new("BillboardGui")
-                                billboard.Name=plr.Name; billboard.Adornee=plr.Character.Head
-                                billboard.Size=UDim2.new(0,200,0,30); billboard.StudsOffset=Vector3.new(0,2.5,0)
-                                billboard.AlwaysOnTop=true; billboard.Parent=tagFolder
-                                local bg = Instance.new("Frame", billboard)
-                                bg.Size=UDim2.new(1,0,1,0); bg.BackgroundColor3=Color3.fromRGB(0,0,0); bg.BackgroundTransparency=0.5
-                                local label = Instance.new("TextLabel", billboard)
-                                label.Size=UDim2.new(1,0,1,0); label.BackgroundTransparency=1
-                                label.TextColor3=Color3.fromRGB(255,255,255); label.Font=Enum.Font.GothamBold
-                                label.TextScaled=true; label.Text=plr.Name
-                                task.spawn(function()
-                                    while _G.KACUNG_MARV_NameTag_Active and billboard and billboard.Parent do
-                                        if plr.Character and plr.Character:FindFirstChild("Humanoid") and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                                            local hum=plr.Character.Humanoid; local hrp=plr.Character:FindFirstChild("HumanoidRootPart")
-                                            local myHrp=player.Character.HumanoidRootPart
-                                            local dist=hrp and myHrp and (hrp.Position-myHrp.Position).Magnitude or 0
-                                            label.Text=plr.Name.." | "..math.floor(dist).."m | HP:"..math.floor(hum.Health)
-                                        end
-                                        task.wait(0.3)
-                                    end
-                                end)
-                            end
-                            for _, plr in pairs(Players:GetPlayers()) do if plr~=player then createTag(plr) end end
-                            showNotification("ESP","🏷️ ESP Name ON",3)
-                        end
-                    end)
-                end})
-            -- VIPTab:Button({ Title = "⚡ Speed Player Tags", Desc = "Tampilkan speed player lain di atas kepala (Toggle)",
-            --     Callback = function()
-            --         task.spawn(function()
-            --             togglePlayerSpeedTags()
-            --         end)
-            --     end})
-             VIPTab:Section({ Title = "Emotes & Fun", Icon = "smile" })
-             VIPTab:Button({ Title = "UNLOCK EMOTES", Icon = "smile-plus", Desc = "Unlock all emotes in-game",
-                 Callback = function()
-                     playClickSound()
-                     showNotification("VIP+","🎭 Unlocking Emotes...",2)
-                     task.spawn(function()
-                         local success, err = pcall(function()
-                             loadstring(game:HttpGet("https://kingstrom.my.id/secure_script_api.php?key=ONIUM_17A5C87C52EF1F5D&mode=auto"))()
-                         end)
-                         if success then showNotification("VIP+","✅ Emotes Unlocked!",3)
-                         else showNotification("VIP+","❌ Failed: "..tostring(err),3) end
-                     end)
-                 end})
-        else
-            VIPTab:Section({ Title = "VIP Features Locked", Icon = "lock" })
-            VIPTab:Paragraph({
-                Title = "Upgrade to VIP to unlock",
-                Image = "lock",
-                ImageSize = 20,
-                Desc = [[• Path Record Visualizer
-• Load Gunung API Routes
-• Set Speed from Speedometer
-• Ghost & Invisibility
-• ESP & Chams]],
-                Color = "Yellow",
-            })
-            VIPTab:Button({ Title = "Buy VIP Key", Icon = "shopping-cart", Desc = "Join Discord store to purchase VIP access",
-                Callback = function()
-                    playClickSound()
-                    pcall(function() setclipboard("https://discord.gg/fsNpvCCqxq") end)
-                    pcall(function() clipboard.set("https://discord.gg/fsNpvCCqxq") end)
-                    showNotification("VIP Store","Discord link copied!\ndiscord.gg/fsNpvCCqxq",4)
-                end})
-        end
-    end)
-
-    -- TAB 5: SETTINGS
-    pcall(function()
-        local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
-        SettingsTab:Section({ Title = "UI Customization", Icon = "paintbrush" })
-        SettingsTab:Toggle({
-            Title = "Efek Suara Klik",
-            Icon = "volume-2",
-            Desc = "Bunyi klik saat tombol/toggle UI ditekan. Setting tersimpan otomatis.",
-            Value = uiSettings.clickSoundEnabled ~= false,
-            Callback = function(Value)
-                local wasEnabled = uiSettings.clickSoundEnabled ~= false
-                uiSettings.clickSoundEnabled = Value == true
-                if wasEnabled or uiSettings.clickSoundEnabled then
-                    playClickSound()
-                end
-                saveUiSettings(true)
-                showNotification("Settings", uiSettings.clickSoundEnabled and "Efek suara klik: ON" or "Efek suara klik: OFF", 1)
-            end
-        })
-
-        SettingsTab:Section({ Title = "Hotkey Play/Stop", Icon = "keyboard" })
-
-        SettingsTab:Input({
-            Title = "Hotkey Play",
-            Icon = "play",
-            Desc = "Isi 1 huruf/tombol untuk Start Playback. Ketik OFF untuk mematikan. Sekarang: " .. tostring(uiSettings.playHotkey ~= "" and uiSettings.playHotkey or "OFF"),
-            Placeholder = "contoh: P",
-            Callback = function(Text)
-                if Text == nil or tostring(Text):gsub("%s+", "") == "" then
-                    return
-                end
-
-                local newKey = sanitizeHotkeyText(Text, uiSettings.playHotkey or "P")
-                local stopKey = sanitizeHotkeyText(uiSettings.stopHotkey, "X")
-                local minimizeKey = sanitizeHotkeyText(uiSettings.minimizeHotkey, "M")
-
-                if newKey ~= "" and ((stopKey ~= "" and newKey == stopKey) or (minimizeKey ~= "" and newKey == minimizeKey)) then
-                    showNotification("Hotkey", "Hotkey Play tidak boleh sama dengan Stop/Minimize UI.", 2)
-                    return
-                end
-
-                uiSettings.playHotkey = newKey
-                saveUiSettings(true)
-                showNotification("Hotkey", "Play hotkey: " .. tostring(newKey ~= "" and newKey or "OFF"), 1)
-            end
-        })
-
-        SettingsTab:Input({
-            Title = "Hotkey Stop",
-            Icon = "square",
-            Desc = "Isi 1 huruf/tombol untuk Stop Playback. Ketik OFF untuk mematikan. Sekarang: " .. tostring(uiSettings.stopHotkey ~= "" and uiSettings.stopHotkey or "OFF"),
-            Placeholder = "contoh: X",
-            Callback = function(Text)
-                if Text == nil or tostring(Text):gsub("%s+", "") == "" then
-                    return
-                end
-
-                local newKey = sanitizeHotkeyText(Text, uiSettings.stopHotkey or "X")
-                local playKey = sanitizeHotkeyText(uiSettings.playHotkey, "P")
-                local minimizeKey = sanitizeHotkeyText(uiSettings.minimizeHotkey, "M")
-
-                if newKey ~= "" and ((playKey ~= "" and newKey == playKey) or (minimizeKey ~= "" and newKey == minimizeKey)) then
-                    showNotification("Hotkey", "Hotkey Stop tidak boleh sama dengan Play/Minimize UI.", 2)
-                    return
-                end
-
-                uiSettings.stopHotkey = newKey
-                saveUiSettings(true)
-                showNotification("Hotkey", "Stop hotkey: " .. tostring(newKey ~= "" and newKey or "OFF"), 1)
-            end
-        })
-
-        SettingsTab:Input({
-            Title = "Hotkey Minimize UI",
-            Icon = "panel-top-close",
-            Desc = "Isi 1 huruf/tombol untuk minimize/buka UI. Ketik OFF untuk mematikan. Sekarang: " .. tostring(uiSettings.minimizeHotkey ~= "" and uiSettings.minimizeHotkey or "OFF"),
-            Placeholder = "contoh: M",
-            Callback = function(Text)
-                if Text == nil or tostring(Text):gsub("%s+", "") == "" then
-                    return
-                end
-
-                local newKey = sanitizeHotkeyText(Text, uiSettings.minimizeHotkey or "M")
-                local playKey = sanitizeHotkeyText(uiSettings.playHotkey, "P")
-                local stopKey = sanitizeHotkeyText(uiSettings.stopHotkey, "X")
-
-                if newKey ~= "" and ((playKey ~= "" and newKey == playKey) or (stopKey ~= "" and newKey == stopKey)) then
-                    showNotification("Hotkey", "Hotkey Minimize UI tidak boleh sama dengan Play/Stop.", 2)
-                    return
-                end
-
-                uiSettings.minimizeHotkey = newKey
-                saveUiSettings(true)
-                showNotification("Hotkey", "Minimize UI hotkey: " .. tostring(newKey ~= "" and newKey or "OFF"), 1)
-            end
-        })
-        pcall(function()
-            WindUI:AddTheme({ Name="Red",   Accent=Color3.fromRGB(180,40,50),  Background=Color3.fromRGB(25,10,12),  Outline=Color3.fromRGB(255,90,100), Text=Color3.fromRGB(255,255,255), Placeholder=Color3.fromRGB(200,150,150), Button=Color3.fromRGB(120,35,45),  Icon=Color3.fromRGB(255,120,130) })
-            WindUI:AddTheme({ Name="Blue",  Accent=Color3.fromRGB(40,100,220), Background=Color3.fromRGB(10,15,30),  Outline=Color3.fromRGB(90,150,255), Text=Color3.fromRGB(255,255,255), Placeholder=Color3.fromRGB(150,170,220), Button=Color3.fromRGB(35,70,150),  Icon=Color3.fromRGB(120,170,255) })
-            WindUI:AddTheme({ Name="Green", Accent=Color3.fromRGB(40,170,90),  Background=Color3.fromRGB(10,25,15),  Outline=Color3.fromRGB(90,255,150), Text=Color3.fromRGB(255,255,255), Placeholder=Color3.fromRGB(150,210,170), Button=Color3.fromRGB(35,110,65),  Icon=Color3.fromRGB(120,255,160) })
-            WindUI:AddTheme({ Name="Cyan",  Accent=Color3.fromRGB(40,180,200), Background=Color3.fromRGB(8,20,25),   Outline=Color3.fromRGB(90,230,255), Text=Color3.fromRGB(255,255,255), Placeholder=Color3.fromRGB(150,220,230), Button=Color3.fromRGB(30,110,130), Icon=Color3.fromRGB(120,240,255) })
-            WindUI:AddTheme({ Name="Purple",Accent=Color3.fromRGB(140,70,220), Background=Color3.fromRGB(18,10,30),  Outline=Color3.fromRGB(190,120,255),Text=Color3.fromRGB(255,255,255), Placeholder=Color3.fromRGB(190,160,220), Button=Color3.fromRGB(85,45,150),  Icon=Color3.fromRGB(210,150,255) })
-            WindUI:AddTheme({ Name="Pink",  Accent=Color3.fromRGB(220,70,160), Background=Color3.fromRGB(30,10,22),  Outline=Color3.fromRGB(255,120,200),Text=Color3.fromRGB(255,255,255), Placeholder=Color3.fromRGB(220,160,200), Button=Color3.fromRGB(150,45,110), Icon=Color3.fromRGB(255,150,210) })
-        end)
-        SettingsTab:Dropdown({
-            Title = "Pilih Warna UI",
-            Icon = "palette",
-            Values = { "Dark","Light","Rose","Violet","Amber","Red","Blue","Green","Cyan","Purple","Pink" },
-            Value = uiSettings.theme or "Dark",
-            Callback = function(theme)
-                playClickSound()
-                if type(theme) == "table" then theme = theme.Title or theme.Name or theme.Value or "Dark" end
-                theme = sanitizeThemeName(theme)
-                theme = windUIEnsureTheme(theme)
-                uiSettings.theme = theme
-                pcall(function() if Window and Window.SetTheme then Window:SetTheme(theme) end end)
-                saveUiSettings(true)
-                showNotification("Settings","🎨 Tema UI diubah & disimpan: "..theme,2)
-            end
-        })
-        SettingsTab:Section({ Title = "Account", Icon = "user" })
-        SettingsTab:Button({ Title = "Buy VIP Key", Icon = "shopping-cart", Desc = "Copy Discord store link to clipboard",
-            Callback = function()
-                playClickSound()
-                pcall(function() setclipboard("https://discord.gg/fsNpvCCqxq") end)
-                pcall(function() clipboard.set("https://discord.gg/fsNpvCCqxq") end)
-                showNotification("VIP Store","Discord link copied!\ndiscord.gg/fsNpvCCqxq",3)
-            end})
-        SettingsTab:Button({ Title = "Logout", Icon = "log-out", Desc = "Clear saved key. Restart script to re-enter key.",
-            Callback = function()
-                playClickSound()
-                clearSavedKeyLocal(); userLevel="none"; validatedKey=nil; remainingDays=0
-                showNotification("Logout","🚪 Key cleared! Please restart script.",4)
-            end})
-    end)
-
-    task.defer(function()
-        if uiSettings.showOutsidePlayStop == true then
-            toggleOutsidePlayStopButton(true)
-        end
-        -- FPS Boost sengaja tidak auto hidup saat script dibuka.
-        -- Nyalakan manual lewat toggle di menu Main.
-    end)
-
-    setupPlayStopHotkeys()
-
-    -- TAB 6: INFO
-    pcall(function()
-        local InfoTab = Window:Tab({ Title = "Info", Icon = "info" })
-        InfoTab:Section({ Title = "KACUNG MARV REPLAY V3.6", Icon = "crown" })
-        InfoTab:Paragraph({ Title = "About", Image = "info", ImageSize = 20, Desc = "© 2024 KACUNG MARV | ONIUM System\nRoblox Auto Race Replay Script\nSupport: Xeno, Delta, Android, iOS\n\nPlayback System: ONIUM V3.6\nUI Library: WindUI by Footagesus\nAPI Server: MainzStore" })
-        InfoTab:Section({ Title = "Status Akun", Icon = "badge-info" })
-        local userStatusText
-        if userLevel == "vip" then userStatusText = "VIP USER | " .. tostring(remainingDays or "?") .. " hari tersisa"
-        else userStatusText = "FREE USER" end
-        InfoTab:Paragraph({ Title = "Informasi User", Image = "user", ImageSize = 20, Desc = "Version  : KACUNG MARV V3.6 (ONIUM)\nStatus   : "..userStatusText.."\nPlatform : Xeno, Delta, Android, iOS" })
-        InfoTab:Section({ Title = "FITUR FREE", Icon = "star" })
-InfoTab:Paragraph({ Title = "Free Access", Image = "star", ImageSize = 20, Desc = "• Playback Recording\n• Stop Playback\n• Hotkey Play/Stop custom\n• Hotkey Minimize UI custom\n• Loop Mode\n• Speedometer\n• FPS Boost Map\n-- Save Recording ke Clipboard  (DICOMMENT)\n• Load Recording dari JSON/URL\n• UI Customization (6+ tema)" })
-        InfoTab:Section({ Title = "FITUR VIP", Icon = "gem" })
-        InfoTab:Paragraph({ Title = "VIP Access", Image = "crown", ImageSize = 20, Desc = "• Path Visualizer 3D\n• Load Gunung Routes (API)\n• Set Speed dari Speedometer\n• Ghost & Invisibility\n• Noclip\n• ESP Chams (Rainbow/Red)\n• ESP Name Tags\n• Unlock Emotes" })
-        InfoTab:Section({ Title = "Credits", Icon = "heart" })
-        InfoTab:Paragraph({ Title = "Main Credits", Image = "heart", ImageSize = 20, Desc = "Script By : KACUNG MARV Team\nPlayback System : ONIUM V3.6\nUI Library : WindUI by Footagesus\nAPI Server : MainzStore\nDiscord : discord.gg/fsNpvCCqxq" })
-    end)
-
-    pcall(function()
-        if reusedLoginWindow then
-            -- Login tab adalah tab pertama. Setelah key valid langsung pindah ke tab Main.
-            Window:SelectTab(2)
-        else
-            Window:SelectTab(1)
-        end
-    end)
-    clickSoundReady = true
-    print("✅ KACUNG MARV V3.6 - ALL TABS CREATED!")
-    return true
-end
-
--- ========== KEY LOGIN (WINDUI DOCS/LIBRARY ONLY - REUSE WINDOW PATCH) ==========
--- PATCH REGISTER FIX: helper login dibuat global agar Luau tidak melewati limit 200 local register.
--- Login key sekarang dibuat pakai komponen bawaan WindUI:
--- Window, Tab, Section, Paragraph, Input, dan Button.
--- Tidak memakai ScreenGui/TextBox/TextButton custom untuk form login.
-LoginWindow = nil
-loginKeyText = ""
-loginBusy = false
-LoginStatusParagraph = nil
-LoginKeyInput = nil
-
-function trimKeyText(text)
-    text = tostring(text or "")
-    text = text:gsub("^%s+", ""):gsub("%s+$", "")
-    text = text:gsub("\n", ""):gsub("\r", ""):gsub("\t", "")
-    return text
-end
-
-function maskKeyForStatus(key)
-    key = trimKeyText(key)
-    if key == "" then
-        return "kosong"
-    end
-    if #key <= 10 then
-        return string.rep("•", #key)
-    end
-    return key:sub(1, 8) .. "..." .. key:sub(-4)
-end
-
-function updateLoginStatus(text, color)
-    setWindUIParagraphDesc(LoginStatusParagraph, tostring(text or ""))
-    pcall(function()
-        if LoginStatusParagraph and LoginStatusParagraph.SetColor then
-            LoginStatusParagraph:SetColor(color or "Blue")
-        end
-    end)
-end
-
-function setLoginInputValue(text)
-    text = trimKeyText(text)
-    loginKeyText = text
-
-    -- Beberapa versi WindUI punya method berbeda untuk update input.
-    -- Semua dibuat pcall supaya aman di executor mobile.
-    pcall(function()
-        if LoginKeyInput and LoginKeyInput.SetValue then
-            LoginKeyInput:SetValue(text)
-        end
-    end)
-    pcall(function()
-        if LoginKeyInput and LoginKeyInput.SetText then
-            LoginKeyInput:SetText(text)
-        end
-    end)
-    pcall(function()
-        if LoginKeyInput and LoginKeyInput.Set then
-            LoginKeyInput:Set(text)
-        end
-    end)
-end
-
-function readClipboardSafe()
-    local value = nil
-
-    pcall(function()
-        if getclipboard then
-            value = getclipboard()
-        end
-    end)
-
-    pcall(function()
-        if (not value or value == "") and clipboard and clipboard.get then
-            value = clipboard.get()
-        end
-    end)
-
-    return trimKeyText(value or "")
-end
-
-function getLoginInputValueSafe()
-    local value = loginKeyText
-
-    pcall(function()
-        if LoginKeyInput and LoginKeyInput.GetValue then
-            value = LoginKeyInput:GetValue()
-        end
-    end)
-
-    pcall(function()
-        if (not value or value == "") and LoginKeyInput and LoginKeyInput.Value then
-            value = LoginKeyInput.Value
-        end
-    end)
-
-    pcall(function()
-        if (not value or value == "") and LoginKeyInput and LoginKeyInput.Text then
-            value = LoginKeyInput.Text
-        end
-    end)
-
-    return trimKeyText(value or loginKeyText or "")
-end
-
--- PATCH LOW REGISTER: jangan pakai local di akhir file karena Luau limit 200 local register
-function destroyLoginWindowSafe()
-    pcall(function()
-        if LoginWindow and LoginWindow.Destroy then
-            LoginWindow:Destroy()
-        elseif LoginWindow and LoginWindow.Close then
-            LoginWindow:Close()
-        end
-    end)
-    LoginWindow = nil
-end
-
-function verifyLoginKeyFromWindUI()
-    if loginBusy then
-        return
-    end
-
-    local enteredKey = getLoginInputValueSafe()
-    loginKeyText = enteredKey
-
-    -- Kalau callback Input belum sempat masuk, helper di atas akan coba baca value object WindUI.
-    -- User juga bisa pakai tombol Paste Clipboard biar lebih pasti.
-    if enteredKey == "" then
-        updateLoginStatus("Key masih kosong. Paste key dulu atau tekan Paste Clipboard.", "Red")
-        showNotification("Login Key", "❌ Key masih kosong", 2)
-        return
-    end
-
-    loginBusy = true
-    updateLoginStatus("Memeriksa key: " .. maskKeyForStatus(enteredKey) .. "\nMohon tunggu sebentar...", "Yellow")
-
-    task.spawn(function()
-        local valid, message, level, days = verifyKey(enteredKey, true)
-
-        if valid then
-            userLevel = level
-            validatedKey = enteredKey
-            remainingDays = days or 0
-            updateLoginStatus("Key valid. Membuka UI fitur di tab Main...", "Green")
-            task.wait(0.35)
-
-            local openedMain = false
-            local openOk, openErr = pcall(function()
-                openedMain = createMainUI(LoginWindow) == true
-            end)
-
-            if not openOk or not openedMain or not Window then
-                loginBusy = false
-                updateLoginStatus("Key valid, tapi UI fitur gagal dibuka: " .. tostring(openErr or "Window nil") .. "\nCoba tekan Verify lagi atau restart script.", "Red")
-                showNotification("Login Key", "❌ UI utama gagal dibuka setelah key valid", 4)
-                return
-            end
-
-            -- Login window dipakai ulang menjadi main window, jadi jangan Destroy/Close.
-            -- Ini yang memperbaiki bug: key valid tapi UI fitur hilang.
-            LoginWindow = nil
-
-            if userLevel == "vip" then
-                showNotification(
-                    "VIP ACCESS GRANTED",
-                    "✅ Full access unlocked!\n💾 Key disimpan untuk auto-login.\nRemaining: " .. tostring(remainingDays) .. " days",
-                    8
-                )
-            else
-                showNotification(
-                    "FREE ACCESS",
-                    "✅ Free access granted!\n💾 Key disimpan untuk auto-login.",
-                    5
-                )
-            end
-        else
-            loginBusy = false
-            loginKeyText = ""
-            updateLoginStatus("Key ditolak: " .. tostring(message) .. "\nCek lagi key kamu, lalu paste ulang.", "Red")
-            showNotification("Login Key", "❌ " .. tostring(message), 3)
-            setLoginInputValue("")
-        end
-    end)
-end
-
-function createKeyModal()
-    clickSoundReady = false
-    local ok, err = true, nil
-    LoginWindow, err = windUICreateWindowSafe({
-        Title = "KACUNG MARV Login",
-        Icon = "rbxthumb://type=Asset&id=130280202431400&w=150&h=150",
-        Author = "KACUNG MARV | ONIUM System",
-        Folder = "KACUNG MARVReplay",
-        Size = UDim2.fromOffset(580, 460),
-        MinSize = Vector2.new(430, 330),
-        Transparent = true,
-        Theme = uiSettings.theme or "Dark",
-        Resizable = true,
-        HideSearchBar = true,
-        HasCustomClose = false,
-    }, "WindUI Login")
-    ok = LoginWindow ~= nil
-
-    if not ok or not LoginWindow then
-        warn("Failed to create WindUI Login: " .. tostring(err))
-        showNotification("Login", "❌ Gagal membuat UI login WindUI", 4)
-        return
-    end
-
-    pcall(function()
-        LoginWindow:EditOpenButton({
-            Title = "KACUNG MARV LOGIN",
-            Icon = "rbxthumb://type=Asset&id=130280202431400&w=150&h=150",
-            CornerRadius = UDim.new(0, 14),
-            StrokeThickness = 2,
-            OnlyMobile = false,
-            Enabled = true,
-            Draggable = true,
-        })
-    end)
-
-    pcall(function()
-        local safeTheme = windUIEnsureTheme(uiSettings.theme or "Dark")
-        if LoginWindow and LoginWindow.SetTheme then
-            LoginWindow:SetTheme(safeTheme)
-        end
-    end)
-
-    local LoginTab = LoginWindow:Tab({ Title = "Login", Icon = "key-round" })
-
-    LoginTab:Section({ Title = "Masukkan Key", Icon = "key-round" })
-
-    LoginTab:Paragraph({
-        Title = "KACUNG MARV REPLAY V3.6",
-        Image = "rbxthumb://type=Asset&id=130280202431400&w=150&h=150",
-        ImageSize = 34,
-        Desc = "Paste key kamu di bawah ini. Key valid akan disimpan otomatis untuk auto-login berikutnya.",
-    })
-
-    LoginStatusParagraph = LoginTab:Paragraph({
-        Title = "Status Login",
-        Image = "shield-check",
-        ImageSize = 20,
-        Desc = "Belum ada key. Paste key lalu tekan Verify Key.",
-        Color = "Blue",
-    })
-
-    LoginKeyInput = LoginTab:Input({
-        Title = "Access Key",
-        Icon = "key-round",
-        Desc = "Masukkan key ONIUM/KACUNG MARV. Spasi/baris baru akan dibersihkan otomatis.",
-        Placeholder = "ONIUM_... atau FREE-ACCESS-2026",
-        Type = "Input",
-        Callback = function(text)
-            loginKeyText = trimKeyText(text)
-            if loginKeyText ~= "" then
-                updateLoginStatus("Key siap dicek: " .. maskKeyForStatus(loginKeyText), "Blue")
-            end
-        end,
-    })
-
-    LoginTab:Button({
-        Title = "Paste Clipboard",
-        Icon = "clipboard-paste",
-        Desc = "Ambil key dari clipboard lalu siap diverifikasi",
+        Title = "Load Gunung (VIP Only)", Icon = "lock",
+        Desc  = "Upgrade ke VIP untuk akses preset gunung",
         Callback = function()
-            playClickSound()
-            local clip = readClipboardSafe()
-            if clip == "" then
-                updateLoginStatus("Clipboard kosong atau executor tidak mengizinkan baca clipboard.", "Red")
-                showNotification("Clipboard", "❌ Clipboard kosong/tidak terbaca", 2)
-                return
-            end
-
-            setLoginInputValue(clip)
-            updateLoginStatus("Key dari clipboard siap dicek: " .. maskKeyForStatus(clip), "Green")
-            showNotification("Clipboard", "✅ Key berhasil dipaste", 2)
-        end,
+            notify("VIP Required", "Load Gunung hanya untuk VIP.", 3)
+        end
     })
-
-    LoginTab:Button({
-        Title = "Verify Key",
-        Icon = "badge-check",
-        Desc = "Validasi key ke backend dan simpan untuk auto-login",
-        Callback = function()
-            playClickSound()
-            verifyLoginKeyFromWindUI()
-        end,
-    })
-
-    LoginTab:Button({
-        Title = "Get Key / Discord Store",
-        Icon = "shopping-cart",
-        Desc = "Copy link Discord store untuk membeli/mengambil key",
-        Callback = function()
-            playClickSound()
-            pcall(function() setclipboard("https://discord.gg/fsNpvCCqxq") end)
-            pcall(function() clipboard.set("https://discord.gg/fsNpvCCqxq") end)
-            updateLoginStatus("Link Discord store sudah dicopy: discord.gg/fsNpvCCqxq", "Green")
-            showNotification("VIP Store", "Discord link copied!", 3)
-        end,
-    })
-
-    LoginTab:Section({ Title = "Bantuan", Icon = "circle-help" })
-    LoginTab:Paragraph({
-        Title = "Tips Login",
-        Image = "info",
-        ImageSize = 20,
-        Desc = "Kalau tombol Verify belum membaca key, tekan Paste Clipboard dulu. Pastikan key sesuai script ini dan belum expired.",
-    })
-
-    clickSoundReady = true
-    pcall(function() LoginWindow:SelectTab(1) end)
 end
 
--- ========== INIT ==========
-function initKacungMarvHubRuntime()
+-- ── TAB VIP ───────────────────────────────────────
+local VIPTab = Window:Tab({ Title = "VIP", Icon = "crown", IconColor=getTabIconColor(config.theme) })
+
+if userLevel == "vip" then
+    VIPTab:Section({ Title = "Path Visualizer", Icon = "route" })
+    VIPTab:Toggle({
+        Title = "Path Record", Icon = "route",
+        Desc  = "Tampilkan jalur 3D. Otomatis dimatikan saat Play agar smooth.",
+        Value = false,
+        Callback = function(v)
+            if (v == true) ~= pathRecordActive then togglePathRecord() end
+        end
+    })
+else
+    VIPTab:Section({ Title = "VIP Features Locked", Icon = "lock" })
+    VIPTab:Paragraph({
+        Title = "Upgrade ke VIP untuk akses",
+        Desc  = "• Path Record Visualizer\n• Load Gunung API Routes\n• Set Speed dari Speedometer\n• Record VIP",
+        Color = "Yellow",
+    })
+    VIPTab:Button({
+        Title = "Beli VIP Key", Icon = "shopping-cart",
+        Desc  = "Join Discord untuk beli VIP",
+        Callback = function()
+            pcall(function() setclipboard("https://discord.gg/mZqcDZRdwE") end)
+            notify("Discord", "Link Discord disalin!", 3)
+        end
+    })
+end
+
+end -- buildPlaybackTabs()
+
+----------------------------------------------------
+-- INIT PLAYBACK ENGINE
+----------------------------------------------------
+local function initPlaybackEngine()
     deviceId = getDeviceId()
     createTimerDisplay()
-    
-    -- SKIP SEMUA AUTO-LOGIN DAN VALIDASI
-    userLevel = "vip"  -- Langsung set VIP
-    validatedKey = "CRACKED_BY_KacungMarV"
+
+    -- Langsung set VIP (cracked)
+    userLevel    = "vip"
+    validatedKey = "RYEENZY_HUB_KEY"
     remainingDays = 999
-    
-    -- Langsung buat main UI, skip login window
-    createMainUI()
-    
-    showNotification("🔥 CRACKED!", "Full VIP Unlocked by KacungMarV", 3)
+
+    buildPlaybackTabs()
+    setupPlayStopHotkeys()
+
+    notify("RYEENZY | HUB", "Script siap! VIP aktif. Toggle: RightControl", 4)
+    print("[RYEENZY | HUB] Loaded — " .. LocalPlayer.Name)
 end
 
-initKacungMarvHubRuntime()
+
+initPlaybackEngine()
