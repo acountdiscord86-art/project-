@@ -689,6 +689,7 @@ ParryRing.CFrame =
         0
     )
 ParryRing.Adornee = HumanoidRootPart
+ParryRing.Visible = false  -- hanya tampil saat AutoParry aktif
 ParryRing.Parent = TargetGui
 
 ----------------------------------------------------------------
@@ -2782,8 +2783,15 @@ DefenseSection:Toggle({
 
         AutoParry=v
 
+        -- Show/hide ParryRing sesuai state
         pcall(function()
+            local ring = TargetGui:FindFirstChild("RYEENZY_ParryRing")
+            if ring then
+                ring.Visible = v
+            end
+        end)
 
+        pcall(function()
             WindUI:Notify({
                 Title="Auto Dagger",
                 Content=v
@@ -2864,6 +2872,7 @@ DefenseSection:Slider({
     
         if ring then
             ring.Radius = ParryDistance
+            ring.Visible = AutoParry  -- sinkron dengan state AutoParry
         end
     end
 })
@@ -4616,6 +4625,41 @@ local KILLER_ATTACK_ANIMS = {
 local KillerAnimState = {} -- [UserId] = {lastAnimId, lastParryTick}
 
 ----------------------------------------------------------------
+-- PARRY ANIMATION ID
+----------------------------------------------------------------
+local PARRY_ANIM_ID = "rbxassetid://127096285501517"
+local parryAnimTrack = nil
+
+----------------------------------------------------------------
+-- PLAY PARRY ANIMATION langsung ke Humanoid
+----------------------------------------------------------------
+local function PlayParryAnimation()
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return end
+
+        local animator = hum:FindFirstChildOfClass("Animator")
+        if not animator then return end
+
+        -- Stop track lama kalau masih jalan
+        if parryAnimTrack and parryAnimTrack.IsPlaying then
+            parryAnimTrack:Stop(0)
+        end
+
+        -- Load animation baru
+        local anim = Instance.new("Animation")
+        anim.AnimationId = PARRY_ANIM_ID
+
+        parryAnimTrack = animator:LoadAnimation(anim)
+        parryAnimTrack.Priority = Enum.AnimationPriority.Action4 -- Override semua animasi lain
+        parryAnimTrack:Play(0) -- fade 0 = langsung tanpa transisi
+    end)
+end
+
+----------------------------------------------------------------
 -- PARRY VIA ParryClient MODULE (metode resmi game)
 ----------------------------------------------------------------
 local function TriggerParryClient()
@@ -4626,19 +4670,30 @@ local function TriggerParryClient()
         local dagger = char:FindFirstChild("Parrying Dagger")
         if not dagger then return end
 
-        local script = dagger:FindFirstChild("parrying dagger")
-        if not script then return end
+        -- 1. Play animasi parry manual dulu (supaya muncul)
+        PlayParryAnimation()
 
-        local v1 = ReplicatedStorage
-        local v2 = require(v1:WaitForChild("Modules"):WaitForChild("Items"):WaitForChild("ParryClient"))
+        -- 2. Require ParryClient module dari game
+        local ok, v2 = pcall(function()
+            return require(
+                ReplicatedStorage
+                :WaitForChild("Modules")
+                :WaitForChild("Items")
+                :WaitForChild("ParryClient")
+            )
+        end)
 
-        local v3 = {
-            ["tool"]          = dagger,
-            ["animationId"]   = 127096285501517,
-            ["lockDuration"]  = 0.8,
-        }
+        if ok and v2 then
+            local script = dagger:FindFirstChild("parrying dagger")
 
-        v2.new(v3)
+            local v3 = {
+                ["tool"]         = dagger,
+                ["animationId"]  = 127096285501517,
+                ["lockDuration"] = 0.8,
+            }
+
+            pcall(function() v2.new(v3) end)
+        end
     end)
 end
 
@@ -5544,6 +5599,20 @@ t_insert(
         -- ScanKillerAttackAnim = cek animasi attack killer
         -- TriggerParryDagger   = fallback jarak kalau dagger tidak tersedia
         ------------------------------------------------
+
+        -- Sinkron visibility ring dengan state AutoParry
+        pcall(function()
+            local ring = TargetGui and TargetGui:FindFirstChild("RYEENZY_ParryRing")
+            if ring then
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    ring.Adornee  = root
+                    ring.Visible  = AutoParry
+                    ring.Radius   = tonumber(ParryDistance) or 10
+                end
+            end
+        end)
 
         if AutoParry then
             pcall(function()
