@@ -4627,11 +4627,15 @@ local KillerAnimState = {} -- [UserId] = {lastAnimId, lastParryTick}
 ----------------------------------------------------------------
 -- PARRY ANIMATION ID
 ----------------------------------------------------------------
-local PARRY_ANIM_ID = "rbxassetid://127096285501517"
-local parryAnimTrack = nil
+local PARRY_ANIM_ID    = "rbxassetid://127096285501517"
+local parryAnimTrack   = nil
+local isParrying       = false
+local PARRY_ANIM_TIME  = 0.35  -- durasi animasi parry (detik)
 
 ----------------------------------------------------------------
--- PLAY PARRY ANIMATION langsung ke Humanoid
+-- PLAY PARRY ANIMATION — natural, tidak lock movement
+-- Pakai Action priority (bukan Action4) supaya bisa blend
+-- dengan walk animation sekaligus
 ----------------------------------------------------------------
 local function PlayParryAnimation()
     pcall(function()
@@ -4644,36 +4648,78 @@ local function PlayParryAnimation()
         local animator = hum:FindFirstChildOfClass("Animator")
         if not animator then return end
 
-        -- Stop track lama kalau masih jalan
+        -- Jika masih playing, stop dulu dengan fade smooth
         if parryAnimTrack and parryAnimTrack.IsPlaying then
-            parryAnimTrack:Stop(0)
+            parryAnimTrack:Stop(0.05)
         end
 
-        -- Load animation baru
+        -- Pastikan WalkSpeed tidak di-lock
+        local savedSpeed = hum.WalkSpeed
+
+        -- Load & play dengan priority Action (bukan Action4)
+        -- Action blend dengan Movement, jadi bisa jalan sambil parry
         local anim = Instance.new("Animation")
         anim.AnimationId = PARRY_ANIM_ID
 
         parryAnimTrack = animator:LoadAnimation(anim)
-        parryAnimTrack.Priority = Enum.AnimationPriority.Action4 -- Override semua animasi lain
-        parryAnimTrack:Play(0) -- fade 0 = langsung tanpa transisi
+        parryAnimTrack.Priority = Enum.AnimationPriority.Action
+        parryAnimTrack:Play(0.05)  -- fade in sedikit agar natural
+
+        isParrying = true
+
+        -- Restore WalkSpeed setelah animasi selesai (anti-lock)
+        task.delay(PARRY_ANIM_TIME, function()
+            isParrying = false
+            if hum and hum.Parent then
+                if hum.WalkSpeed < savedSpeed then
+                    hum.WalkSpeed = savedSpeed
+                end
+            end
+            if parryAnimTrack and parryAnimTrack.IsPlaying then
+                parryAnimTrack:Stop(0.1)
+            end
+        end)
+    end)
+end
+
+----------------------------------------------------------------
+-- ENSURE WALKSPEED TIDAK PERNAH 0 SAAT PARRY
+-- Jalan di background selama parry aktif
+----------------------------------------------------------------
+local function EnsureWalkable()
+    pcall(function()
+        local char = LocalPlayer.Character
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Parent and hum.WalkSpeed == 0 then
+            local baseWalk = getgenv().BaseWalkSpeed or 16
+            hum.WalkSpeed = baseWalk
+        end
     end)
 end
 
 ----------------------------------------------------------------
 -- PARRY VIA ParryClient MODULE (metode resmi game)
+-- lockDuration = 0 supaya tidak freeze movement
 ----------------------------------------------------------------
 local function TriggerParryClient()
     pcall(function()
-        local char   = LocalPlayer.Character
+        local char = LocalPlayer.Character
         if not char then return end
 
         local dagger = char:FindFirstChild("Parrying Dagger")
         if not dagger then return end
 
-        -- 1. Play animasi parry manual dulu (supaya muncul)
+        -- 1. Play animasi secara natural (bisa sambil jalan)
         PlayParryAnimation()
 
-        -- 2. Require ParryClient module dari game
+        -- 2. Fire parry remote langsung (paling reliable & cepat)
+        local remote = GetParryRemote()
+        if remote then
+            pcall(function() remote:FireServer() end)
+        end
+
+        -- 3. ParryClient module sebagai pelengkap
+        --    lockDuration = 0 → tidak freeze movement
         local ok, v2 = pcall(function()
             return require(
                 ReplicatedStorage
@@ -4684,16 +4730,18 @@ local function TriggerParryClient()
         end)
 
         if ok and v2 then
-            local script = dagger:FindFirstChild("parrying dagger")
-
             local v3 = {
                 ["tool"]         = dagger,
                 ["animationId"]  = 127096285501517,
-                ["lockDuration"] = 0.8,
+                ["lockDuration"] = 0,  -- 0 = tidak lock movement sama sekali
             }
-
             pcall(function() v2.new(v3) end)
         end
+
+        -- 4. Pastikan tidak stuck / freeze
+        task.delay(0.05, EnsureWalkable)
+        task.delay(0.15, EnsureWalkable)
+        task.delay(0.35, EnsureWalkable)
     end)
 end
 
@@ -5010,14 +5058,8 @@ local function TriggerParryDagger()
     task.spawn(function()
         if finalDelay>0 then task.wait(finalDelay) end
         TriggerParryClient()
-        local r=GetParryRemote()
-        if r then
-            for i=1,CFG_BurstAmount do
-                if not AutoParry then break end
-                pcall(function() r:FireServer() end)
-                task.wait(0.008)
-            end
-        end
+        task.delay(0.05, EnsureWalkable)
+        task.delay(0.2,  EnsureWalkable)
     end)
 end
 
