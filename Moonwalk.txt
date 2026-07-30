@@ -11,7 +11,6 @@ local VirtualInputManager=cloneref(game:GetService("VirtualInputManager"))
 local CoreGui=cloneref(game:GetService("CoreGui"))
 local GuiService=cloneref(game:GetService("GuiService"))
 local ReplicatedStorage=cloneref(game:GetService("ReplicatedStorage"))
-local PathfindingService=cloneref(game:GetService("PathfindingService"))
 local ProximityPromptService=cloneref(game:GetService("ProximityPromptService"))
 local HttpService=cloneref(game:GetService("HttpService"))
 local LocalPlayer=Players.LocalPlayer
@@ -346,7 +345,6 @@ local WarnKiller=true
 local ActiveGenerators={}
 local ThemeName="RYEENZY | HUB"
 local Refreshing=false
-local AutoFarmBot=false
 
 local SilentAimPistol=false
 local SilentAimFOV=180
@@ -689,7 +687,6 @@ ParryRing.CFrame =
         0
     )
 ParryRing.Adornee = HumanoidRootPart
-ParryRing.Visible = false  -- hanya tampil saat AutoParry aktif
 ParryRing.Parent = TargetGui
 
 ----------------------------------------------------------------
@@ -2629,53 +2626,6 @@ TabProfile:Paragraph({
     }
 })
 -----------------------------------------------------------
--- [TAB VIP] ULTIMATE AUTOMATION
------------------------------------------------------------
-local AISection = kito:Section({
-    Title = gradient("Automatic System",Color3.fromHex("#F59E0B"),Color3.fromHex("#EF4444")),
-    Box = true,
-    TextXAlignment = "Left",
-    TextSize = 18,
-    Icon = "rbxassetid://110504092653012"
-})
-
-AISection:Toggle({
-    Title = "Auto Play (Smart AI)",
-    Desc = "AI otomatis mencari Generator, Gate & menghindari Killer.",
-    Flag = "F_AutoFarm",
-    Value = false,
-   -- Locked = false,
-    Locked = false,
-    Callback = function(v)
-        
-        AutoFarmBot = v
-
-        if v then
-            AutoGenerator = true
-            AutoGeneratorMode = "Perfect"
-
-            WindUI:Notify({
-                Title = "AI Enabled",
-                Content = "Smart survivor bot berhasil diaktifkan.",
-                Icon = "lucide:bot"
-            })
-        else
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-
-            if hum and root then
-                hum:MoveTo(root.Position)
-            end
-
-            WindUI:Notify({
-                Title = "AI Disabled",
-                Content = "Smart AI berhasil dimatikan.",
-                Icon = "lucide:circle-off"
-            })
-        end
-    end
-})
 kito:Space({ Columns = 1 })
 local MoonSection = kito:Section({
     Title = gradient("MoonWalk",Color3.fromHex("#F59E0B"),Color3.fromHex("#EF4444")),
@@ -2781,17 +2731,15 @@ DefenseSection:Toggle({
     Locked = false,
     Callback=function(v)
 
+        if v
+         then
+            return
+        end
+
         AutoParry=v
 
-        -- Show/hide ParryRing sesuai state
         pcall(function()
-            local ring = TargetGui:FindFirstChild("RYEENZY_ParryRing")
-            if ring then
-                ring.Visible = v
-            end
-        end)
 
-        pcall(function()
             WindUI:Notify({
                 Title="Auto Dagger",
                 Content=v
@@ -2872,7 +2820,6 @@ DefenseSection:Slider({
     
         if ring then
             ring.Radius = ParryDistance
-            ring.Visible = AutoParry  -- sinkron dengan state AutoParry
         end
     end
 })
@@ -4571,519 +4518,208 @@ task.spawn(function()
     end
 end)
 ----------------------------------------------------------------
--- AUTO PARRY (MOBILE + PC SUPPORT)
--- CONTINUOUS PARRY IN RANGE
+
+----------------------------------------------------------------
+-- AUTO PARRY v2 — METHOD 1: FIRE BUTTON CONNECTIONS DIRECTLY
+-- (Most reliable - dari standalone auto parry script)
 ----------------------------------------------------------------
 
-local IgnoreSkills={
-    "Veil","Masked","Stalker","Invisible",
-    "Ghost","Phase","Dash","Warp","Teleport"
+local AP_KillerAttackAnimations = {
+    "132817836308238", "82666958311998", "129784271201071",
+    "139369275981139", "110355011987939",
+    "133963973694098", "117042998468241", "95934119190708", "129918027564423",
+    "74968262036854", "113255068724446",
+    "78432063483146", "77081789642514", "118907603246885", "80411309607666",
+    "78935059863801", "122812055447896", "92098503722633", "84093948968516",
+    "93136435416899", "86266790353635", "138045669415653", "137688077908355",
+    "111920872708571", "105374834496520", "138720291317243", "130593238885843",
+    "115244153053858", "106871536134254", "109402730355822", "117070354890871",
+    "121216847022485", "135002183282873"
 }
 
-local KillerProfiles={
-    Killer={BonusDist=1,Delay=0.04},
-    Abysswalker={BonusDist=3.5,Delay=0.12},
-    Hidden={BonusDist=2.2,Delay=0},
-    Masked={BonusDist=1.5,Delay=0.05},
-    Stalker={BonusDist=1.8,Delay=0},
-    Veil={BonusDist=3.2,Delay=0.04},
-    Slasher={BonusDist=1.2,Delay=0.05},
-    Cure={BonusDist=2,Delay=0.03},
+local AP_State = {
+    LastParryTime = 0,
+    ParryCooldown = 2.5,
+    IsParrying = false,
+    ParryDelay = 0.15,
+    ParryRange = 15,
+    CooldownThreshold = 0.9,
 }
 
-----------------------------------------------------------------
--- KILLER ATTACK ANIMATION IDs
--- Dipakai untuk deteksi serangan SEBELUM kena
-----------------------------------------------------------------
-local KILLER_ATTACK_ANIMS = {
-    -- VEIL
-    ["122812055447896"] = {type="lungehold", delay=0.04},
-    ["78935059863801"]  = {type="attack",    delay=0.04},
-    -- SLASHER
-    ["110355011987939"] = {type="lungehold", delay=0.05},
-    ["139369275981139"] = {type="attack",    delay=0.05},
-    ["135181748009911"] = {type="kick",      delay=0.05},
-    -- HIDDEN
-    ["113255068724446"] = {type="lungehold", delay=0},
-    ["74968262036854"]  = {type="attack",    delay=0},
-    -- MYERS
-    ["117042998468241"] = {type="lungehold", delay=0.05},
-    ["133963973694098"] = {type="attack",    delay=0.05},
-    -- JEFF
-    ["129784271201071"] = {type="lungehold", delay=0},
-    ["132817836308238"] = {type="attack",    delay=0},
-    -- ABYSSWALKER
-    ["118907603246885"] = {type="lungehold", delay=0.12},
-    ["78432063483146"]  = {type="attack",    delay=0.12},
-    ["80411309607666"]  = {type="slash",     delay=0.12},
-    -- CURE
-    ["135002183282873"] = {type="lungehold", delay=0.03},
-    ["121216847022485"] = {type="attack",    delay=0.03},
-}
-
--- State per killer (supaya parry tidak spam repeat)
-local KillerAnimState = {} -- [UserId] = {lastAnimId, lastParryTick}
-
-----------------------------------------------------------------
--- PARRY ANIMATION ID
-----------------------------------------------------------------
-local PARRY_ANIM_ID    = "rbxassetid://127096285501517"
-local parryAnimTrack   = nil
-local isParrying       = false
-local PARRY_ANIM_TIME  = 0.35  -- durasi animasi parry (detik)
-
-----------------------------------------------------------------
--- PLAY PARRY ANIMATION — natural, tidak lock movement
--- Pakai Action priority (bukan Action4) supaya bisa blend
--- dengan walk animation sekaligus
-----------------------------------------------------------------
-local function PlayParryAnimation()
-    pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return end
-
-        local animator = hum:FindFirstChildOfClass("Animator")
-        if not animator then return end
-
-        -- Jika masih playing, stop dulu dengan fade smooth
-        if parryAnimTrack and parryAnimTrack.IsPlaying then
-            parryAnimTrack:Stop(0.05)
-        end
-
-        -- Pastikan WalkSpeed tidak di-lock
-        local savedSpeed = hum.WalkSpeed
-
-        -- Load & play dengan priority Action (bukan Action4)
-        -- Action blend dengan Movement, jadi bisa jalan sambil parry
-        local anim = Instance.new("Animation")
-        anim.AnimationId = PARRY_ANIM_ID
-
-        parryAnimTrack = animator:LoadAnimation(anim)
-        parryAnimTrack.Priority = Enum.AnimationPriority.Action
-        parryAnimTrack:Play(0.05)  -- fade in sedikit agar natural
-
-        isParrying = true
-
-        -- Restore WalkSpeed setelah animasi selesai (anti-lock)
-        task.delay(PARRY_ANIM_TIME, function()
-            isParrying = false
-            if hum and hum.Parent then
-                if hum.WalkSpeed < savedSpeed then
-                    hum.WalkSpeed = savedSpeed
-                end
-            end
-            if parryAnimTrack and parryAnimTrack.IsPlaying then
-                parryAnimTrack:Stop(0.1)
-            end
-        end)
-    end)
+local function AP_GetParryButton()
+    local gui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not gui then return nil end
+    local survivorGui = gui:FindFirstChild("Survivor-mob")
+    if not survivorGui then return nil end
+    local controls = survivorGui:FindFirstChild("Controls")
+    if not controls then return nil end
+    local guiMob = controls:FindFirstChild("Gui-mob")
+    if not guiMob then return nil end
+    local icon = guiMob:FindFirstChild("icon")
+    return icon
 end
 
-----------------------------------------------------------------
--- ENSURE WALKSPEED TIDAK PERNAH 0 SAAT PARRY
--- Jalan di background selama parry aktif
-----------------------------------------------------------------
-local function EnsureWalkable()
-    pcall(function()
-        local char = LocalPlayer.Character
-        local hum  = char and char:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Parent and hum.WalkSpeed == 0 then
-            local baseWalk = getgenv().BaseWalkSpeed or 16
-            hum.WalkSpeed = baseWalk
-        end
-    end)
+local function AP_IsParryReady()
+    local button = AP_GetParryButton()
+    if not button then return false end
+    local bar = button:FindFirstChild("Bar")
+    if not bar then return true end
+    return bar.Size.X.Scale >= AP_State.CooldownThreshold
 end
 
-----------------------------------------------------------------
--- TRIGGER PARRY — persis seperti player pencet tombol sendiri
--- Berdasarkan SimpleSpy: parry = C Closure (FireServer)
--- dipanggil dari parrying dagger LocalScript via tool.Activated
-----------------------------------------------------------------
-local function TriggerParryClient()
-    pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-
-        local dagger = char:FindFirstChild("Parrying Dagger")
-        if not dagger then return end
-
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return end
-
-        -- Simpan WalkSpeed sekarang sebelum parry
-        local savedSpeed = hum.WalkSpeed
-
-        ------------------------------------------------
-        -- METODE 1 (PALING NATURAL):
-        -- firesignal(dagger.Activated) = persis seperti
-        -- player klik/tap tool → script dagger yang
-        -- handle animasi + FireServer sendiri
-        ------------------------------------------------
-        local fired = false
-
-        pcall(function()
-            firesignal(dagger.Activated)
-            fired = true
-        end)
-
-        ------------------------------------------------
-        -- METODE 2 (FALLBACK):
-        -- Jika firesignal tidak tersedia di executor,
-        -- fire remote langsung + play animasi manual
-        ------------------------------------------------
-        if not fired then
-            -- Fire parry remote (sama dengan yang dilakukan script dagger)
-            local remote = GetParryRemote()
-            if remote then
-                pcall(function() remote:FireServer() end)
-            end
-
-            -- Play animasi manual karena firesignal tidak jalan
-            PlayParryAnimation()
-        end
-
-        ------------------------------------------------
-        -- ANTI FREEZE — restore WalkSpeed setelah parry
-        -- Pastikan lockDuration game tidak freeze movement
-        ------------------------------------------------
-        task.delay(0.05,  function()
-            if hum and hum.Parent then
-                hum.WalkSpeed = math.max(hum.WalkSpeed, savedSpeed)
-            end
-        end)
-        task.delay(0.1, function()
-            if hum and hum.Parent then
-                hum.WalkSpeed = math.max(hum.WalkSpeed, savedSpeed)
-            end
-        end)
-        task.delay(0.3, function()
-            if hum and hum.Parent then
-                hum.WalkSpeed = math.max(hum.WalkSpeed, savedSpeed)
-            end
-        end)
-    end)
-end
-
-local ExactParryRemote
-local LastParryTick=0
-local CFG_BurstAmount=8
-local CFG_ParryCooldown=0.06
-local CFG_MaxVelocity=32
-local CFG_AimPrediction=true
-
-----------------------------------------------------------------
--- REMOTE
-----------------------------------------------------------------
-
-local function GetParryRemote()
-
-    if ExactParryRemote and ExactParryRemote.Parent then
-        return ExactParryRemote
-    end
-
-    local remotes=ReplicatedStorage:FindFirstChild("Remotes")
-    if not remotes then
-        return
-    end
-
-    local items=remotes:FindFirstChild("Items")
-    local dagger=items and items:FindFirstChild("Parrying Dagger")
-
-    if dagger and dagger:FindFirstChild("parry") then
-
-        ExactParryRemote=dagger.parry
-
-    else
-
-        for _,v in ipairs(remotes:GetDescendants()) do
-
-            if v:IsA("RemoteEvent")
-            and v.Name:lower()=="parry" then
-
-                ExactParryRemote=v
-                break
+local function AP_IsKillerAttacking(killerChar)
+    if not killerChar then return false end
+    local humanoid = killerChar:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then return false end
+    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+        local animId = track.Animation.AnimationId
+        local id = animId:match("%d+")
+        if id then
+            for _, attackId in pairs(AP_KillerAttackAnimations) do
+                if id == attackId then return true end
             end
         end
     end
-
-    return ExactParryRemote
-end
-
-----------------------------------------------------------------
--- PING
-----------------------------------------------------------------
-
-local function GetPing()
-
-    local ping=0.09
-
-    pcall(function()
-
-        ping=
-            Stats.Network
-            .ServerStatsItem["Data Ping"]
-            :GetValue()/1000
-    end)
-
-    return math.clamp(ping,0.04,0.22)
-end
-
-----------------------------------------------------------------
--- IGNORE SKILLS
-----------------------------------------------------------------
-
-local function IsKillerUsingSkill(char)
-
-    for _,skill in ipairs(IgnoreSkills) do
-
-        if char:GetAttribute(skill)
-        or GetGameValue(char,skill) then
-            return true
-        end
-    end
-
     return false
 end
 
-----------------------------------------------------------------
--- PROFILE
-----------------------------------------------------------------
-
-local function GetKillerProfile(char)
-
-    local selected=
-        getgenv().ParryMatchup
-        or "Auto"
-
-    if selected~="Auto" then
-        return KillerProfiles[selected]
-            or {BonusDist=1,Delay=0}
-    end
-
-    local detect=string.upper(
-        tostring(
-            char:GetAttribute("KillerType")
-            or char:GetAttribute("Mask")
-            or char.Name
-        )
-    )
-
-    for profile,mask in pairs(MaskNames) do
-
-        if detect:find(mask) then
-            return KillerProfiles[profile]
-        end
-    end
-
-    return {BonusDist=1,Delay=0}
-end
-
-----------------------------------------------------------------
--- TRIGGER PARRY
-----------------------------------------------------------------
-
-----------------------------------------------------------------
--- ANIMATION-BASED PARRY TRIGGER
--- Scan semua killer → cek animasi attack/lungehold
--- Jika aktif & dalam jarak → parry otomatis
-----------------------------------------------------------------
-local function ScanKillerAttackAnim()
-
-    if not AutoParry then return end
-
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
-
-    if not (myRoot and myHum) or myHum.Health <= 0 then return end
-
-    local myDagger = myChar:FindFirstChild("Parrying Dagger")
-    if not myDagger then return end
-
-    local now  = tick()
-    local ping = GetPing()
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-
-        if plr == LocalPlayer then continue end
-
-        local eTeam = plr.Team and plr.Team.Name:lower() or ""
-        if not eTeam:find("killer") then continue end
-
-        local eChar = plr.Character
-        if not eChar then continue end
-
-        local eRoot = eChar:FindFirstChild("HumanoidRootPart")
-        local eHum  = eChar:FindFirstChildOfClass("Humanoid")
-        if not (eRoot and eHum) or eHum.Health <= 0 then continue end
-
-        ------------------------------------------------
-        -- JARAK CHECK (dengan prediksi)
-        ------------------------------------------------
-        local vel        = eRoot.AssemblyLinearVelocity
-        if vel.Magnitude > CFG_MaxVelocity then vel = vel.Unit * CFG_MaxVelocity end
-
-        local predictPos = eRoot.Position
-        if CFG_AimPrediction then
-            local strict = getgenv().AimStrictness or 1.3
-            predictPos   = predictPos + vel * (ping + strict * 0.045)
-        end
-
-        local dist = (predictPos - myRoot.Position).Magnitude
-        local profile = GetKillerProfile(eChar)
-        local maxDist = (tonumber(ParryDistance) or 10)
-                      + (profile.BonusDist or 0)
-                      + (ping * 10)
-
-        if dist > maxDist then continue end
-        if IsKillerUsingSkill(eChar) then continue end
-
-        ------------------------------------------------
-        -- CEK ANIMATOR — ANIMASI ATTACK / LUNGEHOLD
-        ------------------------------------------------
-        local animator = eHum:FindFirstChildOfClass("Animator")
-        if not animator then continue end
-
-        local uid     = plr.UserId
-        local state   = KillerAnimState[uid] or {}
-        local triggered = false
-
-        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-
-            if not track.Animation then continue end
-
-            -- Ambil ID bersih dari AnimationId
-            local rawId = track.Animation.AnimationId or ""
-            local animId = rawId:match("(%d+)$") or rawId
-
-            local animData = KILLER_ATTACK_ANIMS[animId]
-
-            if animData then
-
-                ----------------------------------------
-                -- ANTI REPEAT — hanya trigger sekali per animasi per killer
-                ----------------------------------------
-                if state.lastAnimId == animId
-                and now - (state.lastParryTick or 0) < 0.8 then
-                    triggered = true
-                    break
-                end
-
-                ----------------------------------------
-                -- DELAY BERDASARKAN TIPE ANIMASI
-                ----------------------------------------
-                local baseDelay = animData.delay or 0
-                local finalDelay = baseDelay
-                                 + (getgenv().ParryDelayOffset or 0)
-
-                state.lastAnimId   = animId
-                state.lastParryTick = now
-                KillerAnimState[uid] = state
-                triggered = true
-
-                task.spawn(function()
-                    if finalDelay > 0 then task.wait(finalDelay) end
-
-                    if not AutoParry then return end
-
-                    ----------------------------------------
-                    -- METODE 1: ParryClient (resmi)
-                    ----------------------------------------
-                    TriggerParryClient()
-
-                    ----------------------------------------
-                    -- METODE 2: Fallback FireServer langsung
-                    ----------------------------------------
-                    local remote = GetParryRemote()
-                    if remote then
-                        for i = 1, CFG_BurstAmount do
-                            if not AutoParry then break end
-                            pcall(function() remote:FireServer() end)
-                            task.wait(0.008)
-                        end
+local function AP_GetNearestKiller()
+    local char = LocalPlayer.Character
+    if not char then return nil, math.huge end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil, math.huge end
+    local nearestKiller = nil
+    local nearestDistance = math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Team and player.Team.Name:lower():find("killer") then
+            local killerChar = player.Character
+            if killerChar then
+                local killerRoot = killerChar:FindFirstChild("HumanoidRootPart")
+                if killerRoot then
+                    local distance = (killerRoot.Position - root.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestKiller = killerChar
                     end
-                end)
-
-                break -- sudah dapat animasi, berhenti loop track
-            end
-        end
-
-        if not triggered then
-            -- Reset state jika killer tidak sedang attack
-            if state.lastAnimId then
-                state.lastAnimId = nil
-                KillerAnimState[uid] = state
+                end
             end
         end
     end
+    return nearestKiller, nearestDistance
 end
 
-----------------------------------------------------------------
--- Fallback: distance parry (dipanggil hanya jika tidak ada dagger)
-----------------------------------------------------------------
-local function TriggerParryDagger()
+local function AP_TriggerParry()
+    local button = AP_GetParryButton()
+    if not button then return false end
 
-    local now=tick()
-    if now-LastParryTick<CFG_ParryCooldown then return end
+    local success = false
 
-    local remote=GetParryRemote()
-    if not remote then return end
-
-    local char=LocalPlayer.Character
-    local root=char and char:FindFirstChild("HumanoidRootPart")
-    local hum=char and char:FindFirstChildOfClass("Humanoid")
-    if not(root and hum) or hum.Health<=0 then return end
-
-    local tool=
-        char:FindFirstChild("Parrying Dagger")
-        or char:FindFirstChildWhichIsA("Tool")
-    if not tool then return end
-
-    local ping=GetPing()
-    local bestTarget=nil
-    local bestDistance=math.huge
-
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr~=LocalPlayer
-        and plr.Team
-        and plr.Team.Name:lower():find("killer")
-        and plr.Character then
-            local eChar=plr.Character
-            local eRoot=eChar:FindFirstChild("HumanoidRootPart")
-            local eHum=eChar:FindFirstChildOfClass("Humanoid")
-            if eRoot and eHum and eHum.Health>0 then
-                if IsKillerUsingSkill(eChar) then continue end
-                local profile=GetKillerProfile(eChar)
-                local maxDist=(tonumber(ParryDistance) or 10)+(profile.BonusDist or 0)+(ping*10)
-                local predictPos=eRoot.Position
-                if CFG_AimPrediction then
-                    local vel=eRoot.AssemblyLinearVelocity
-                    if vel.Magnitude>CFG_MaxVelocity then vel=vel.Unit*CFG_MaxVelocity end
-                    predictPos+=vel*(ping+((getgenv().AimStrictness or 1.3)*0.045))
-                end
-                local dist=(predictPos-root.Position).Magnitude
-                if dist<=maxDist and dist<bestDistance then
-                    bestDistance=dist
-                    bestTarget={Root=eRoot,Profile=profile}
-                end
-            end
+    -- METHOD 1: Fire button connections directly (Most reliable)
+    pcall(function()
+        for _, connection in pairs(getconnections(button.MouseButton1Click)) do
+            connection:Fire()
+            success = true
         end
-    end
-
-    if not bestTarget then return end
-    LastParryTick=now
-
-    local finalDelay=(bestTarget.Profile.Delay or 0)+(getgenv().ParryDelayOffset or 0)
-    task.spawn(function()
-        if finalDelay>0 then task.wait(finalDelay) end
-        TriggerParryClient()
-        task.delay(0.05, EnsureWalkable)
-        task.delay(0.2,  EnsureWalkable)
+        for _, connection in pairs(getconnections(button.MouseButton1Down)) do
+            connection:Fire()
+            success = true
+        end
+        for _, connection in pairs(getconnections(button.Activated)) do
+            connection:Fire()
+            success = true
+        end
     end)
+
+    -- METHOD 2: VirtualInputManager Touch (Fallback mobile)
+    if not success then
+        pcall(function()
+            local p = button.AbsolutePosition
+            local s = button.AbsoluteSize
+            local gs = game:GetService("GuiService")
+            local inset = gs:GetGuiInset()
+            local cx = p.X + (s.X / 2) + inset.X
+            local cy = p.Y + (s.Y / 2) + inset.Y
+            local touchID = 8823
+            VirtualInputManager:SendTouchEvent(touchID, 0, cx, cy)
+            task.wait(0.05)
+            VirtualInputManager:SendTouchEvent(touchID, 2, cx, cy)
+            success = true
+        end)
+    end
+
+    if success then
+        AP_State.LastParryTime = tick()
+        AP_State.IsParrying = true
+        task.spawn(function()
+            task.wait(0.5)
+            AP_State.IsParrying = false
+        end)
+    end
+
+    return success
 end
+
+-- Recreate parry circle using Beam segments (same as standalone)
+local AP_CircleFolder = nil
+
+local function AP_CreateCircle()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    if AP_CircleFolder and AP_CircleFolder.Parent then AP_CircleFolder:Destroy() end
+    local folder = Instance.new("Folder")
+    folder.Name = "AP_ParryCircle"
+    folder.Parent = root
+    local numSegments = 32
+    local radius = AP_State.ParryRange
+    local yOffset = -3.0
+    for i = 1, numSegments do
+        local angle1 = (i - 1) / numSegments * math.pi * 2
+        local angle2 = i / numSegments * math.pi * 2
+        local pos1 = Vector3.new(math.cos(angle1) * radius, yOffset, math.sin(angle1) * radius)
+        local pos2 = Vector3.new(math.cos(angle2) * radius, yOffset, math.sin(angle2) * radius)
+        local att1 = Instance.new("Attachment")
+        att1.Position = pos1
+        local att2 = Instance.new("Attachment")
+        att2.Position = pos2
+        local beam = Instance.new("Beam")
+        beam.Attachment0 = att1
+        beam.Attachment1 = att2
+        beam.Color = ColorSequence.new(Color3.fromRGB(255, 50, 50))
+        beam.Transparency = NumberSequence.new(0.5)
+        beam.Width0 = 0.3
+        beam.Width1 = 0.3
+        beam.FaceCamera = true
+        beam.Parent = folder
+        att1.Parent = folder
+        att2.Parent = folder
+    end
+    AP_CircleFolder = folder
+end
+
+local function AP_SetCircleColor(color)
+    if not AP_CircleFolder then return end
+    for _, obj in pairs(AP_CircleFolder:GetChildren()) do
+        if obj:IsA("Beam") then
+            obj.Color = ColorSequence.new(color)
+        end
+    end
+end
+
+-- Rebuild circle on respawn
+t_insert(getgenv().RYEENZY_CONNECTIONS, LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(2)
+    if AutoParry then AP_CreateCircle() end
+end))
+
+-- Build initial circle
+task.delay(2, function()
+    if AutoParry then AP_CreateCircle() end
+end)
+
 
 -- =========================================================
 -- [LOGIKA DEWA 3] GLOBAL KILLER STUN DETECTOR
@@ -5659,30 +5295,35 @@ t_insert(
         dynamicDist += killerProfileBonus
         
         ------------------------------------------------
-        -- AUTO PARRY TRIGGER (Animation-Based)
-        -- ScanKillerAttackAnim = cek animasi attack killer
-        -- TriggerParryDagger   = fallback jarak kalau dagger tidak tersedia
+        -- AUTO PARRY TRIGGER
         ------------------------------------------------
-
-        -- Sinkron visibility ring dengan state AutoParry
-        pcall(function()
-            local ring = TargetGui and TargetGui:FindFirstChild("RYEENZY_ParryRing")
-            if ring then
-                local char = LocalPlayer.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                if root then
-                    ring.Adornee  = root
-                    ring.Visible  = AutoParry
-                    ring.Radius   = tonumber(ParryDistance) or 10
-                end
-            end
-        end)
+        
+        if AutoParry then
+        ------------------------------------------------
+        -- AUTO PARRY TRIGGER (v2 — Button Connection Method)
+        ------------------------------------------------
 
         if AutoParry then
             pcall(function()
-                ScanKillerAttackAnim()
+                local killer, killerDist = AP_GetNearestKiller()
+                if killer and killerDist <= (tonumber(ParryDistance) or AP_State.ParryRange) then
+                    AP_SetCircleColor(Color3.fromRGB(0, 255, 0))
+                    if AP_IsKillerAttacking(killer) then
+                        AP_SetCircleColor(Color3.fromRGB(255, 255, 0))
+                        if AP_IsParryReady()
+                        and not AP_State.IsParrying
+                        and (tick() - AP_State.LastParryTime) >= 1.0 then
+                            local delay = (getgenv().ParryDelayOffset or 0)
+                            if delay > 0 then task.wait(delay) end
+                            AP_TriggerParry()
+                        end
+                    end
+                else
+                    AP_SetCircleColor(Color3.fromRGB(255, 50, 50))
+                end
             end)
         end
+
 
         -- =========================================================
         -- REMOTE CACHE
@@ -5840,300 +5481,6 @@ t_insert(
         end
     end)
 )
--- =========================================================
--- [ULTIMATE VIP] GOD-AI AUTO FARM V3.0 (SMOOTH & ANTI-STUTTER)
--- =========================================================
-local CachedHealEvent = nil
-local SearchHealRemote = false
-
--- Variabel Global Komunikasi Antar Thread
-getgenv().AIFinalTarget = nil
-
--- =========================================================
--- [THREAD 1: OTAK AI] MENCARI TARGET & RUTE (Berjalan Lambat / Hemat RAM)
--- =========================================================
-task.spawn(function()
-    while task.wait(0.4) do 
-        if not getgenv().RYEENZY_RUNNING then break end
-        
-        if not AutoFarmBot then 
-            getgenv().CachedWaypoints = nil
-            getgenv().AIFinalTarget = nil
-            continue 
-        end 
-        
-        pcall(function()
-            local myChar = LocalPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local myHum = myChar and myChar:FindFirstChild("Humanoid")
-            
-            if not myRoot or not myHum or myHum.Health <= 0 then return end
-            
-            local team = LocalPlayer.Team and LocalPlayer.Team.Name:lower() or ""
-            if team:find("killer") then return end 
-
-            -- [LOGIKA BARU] Jangan kalkulasi jalan jika sedang Digendong atau Di-Hook!
-            local function IsImmobilized()
-                if GetGameValue(myChar, "IsHooked") or myChar:GetAttribute("IsHooked") then return true end
-                if GetGameValue(myChar, "Carried") or GetGameValue(myChar, "Grabbed") or myChar:GetAttribute("Carried") then return true end
-                return false
-            end
-            if IsImmobilized() then 
-                getgenv().CachedWaypoints = nil
-                getgenv().AIFinalTarget = nil
-                return 
-            end
-
-            local myPos = myRoot.Position
-            local closestKillerDist = 999
-            local killerRoot = nil
-            local injuredTeammate = nil
-            local shortestMateDist = 90
-
-            local players = Players:GetPlayers()
-            for _, p in ipairs(players) do
-                if p ~= LocalPlayer and p.Character then
-                    local eRoot = p.Character:FindFirstChild("HumanoidRootPart")
-                    if eRoot then
-                        local eTeam = p.Team and p.Team.Name:lower() or ""
-                        local dist = (eRoot.Position - myPos).Magnitude
-
-                        if eTeam:find("killer") then
-                            if dist < closestKillerDist then
-                                closestKillerDist = dist; killerRoot = eRoot
-                            end
-                        else
-                            local isKnocked = GetGameValue(p.Character, "Knocked")
-                            local eHum = p.Character:FindFirstChild("Humanoid")
-                            local isInjured = eHum and eHum.Health < eHum.MaxHealth
-                            
-                            if (isKnocked or isInjured) and dist < shortestMateDist then
-                                shortestMateDist = dist; injuredTeammate = p.Character
-                            end
-                        end
-                    end
-                end
-            end
-
-            local completedGens = 0
-            local shortestGenDist = 9999
-            local bestGenTarget = nil
-
-            if CachedMapObjects and CachedMapObjects.Generators then
-                for _, gen in ipairs(CachedMapObjects.Generators) do
-                    local progress = GetGameValue(gen, "RepairProgress") or GetGameValue(gen, "Progress") or 0
-                    if progress >= 100 then
-                        completedGens = completedGens + 1
-                    else
-                        local genPos = gen:GetPivot().Position
-                        local dist = (genPos - myPos).Magnitude
-                        if dist < shortestGenDist then
-                            shortestGenDist = dist; bestGenTarget = genPos
-                        end
-                    end
-                end
-            end
-
-            local targetPos = nil
-            local actionState = "Idle"
-
-            -- PRIORITAS 1: Lari dari Killer
-            if closestKillerDist <= 70 and killerRoot then
-                local maxDistFromKiller = 0
-                local bestEscapeTarget = nil
-                local killerPos = killerRoot.Position
-
-                local function checkSafeSpot(spot)
-                    local spotPos = spot:GetPivot().Position
-                    local distFromKiller = (spotPos - killerPos).Magnitude
-                    if distFromKiller > maxDistFromKiller then
-                        maxDistFromKiller = distFromKiller; bestEscapeTarget = spotPos
-                    end
-                end
-
-                if CachedMapObjects.Generators then for _, g in ipairs(CachedMapObjects.Generators) do checkSafeSpot(g) end end
-                if CachedMapObjects.Gates then for _, g in ipairs(CachedMapObjects.Gates) do checkSafeSpot(g) end end
-                
-                if bestEscapeTarget then
-                    targetPos = bestEscapeTarget
-                else
-                    local runDir = (myPos - killerPos).Unit
-                    targetPos = myPos + (runDir * 50)
-                end
-                actionState = "Evading"
-
-            -- PRIORITAS 2: Heal Teman
-            elseif injuredTeammate then
-                targetPos = injuredTeammate.HumanoidRootPart.Position
-                actionState = "Healing"
-                
-                if shortestMateDist <= 12 then
-                    if not SearchHealRemote then
-                        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                        CachedHealEvent = remotes and (remotes:FindFirstChild("HealEvent", true) or remotes:FindFirstChild("RequestHeal", true) or remotes:FindFirstChild("ReviveEvent", true))
-                        SearchHealRemote = true
-                    end
-
-                    if CachedHealEvent then
-                        pcall(function() CachedHealEvent:FireServer(injuredTeammate, 100) end)
-                        pcall(function() CachedHealEvent:FireServer(injuredTeammate, true) end)
-                    end
-                    
-                    getgenv().CachedWaypoints = nil
-                    getgenv().AIFinalTarget = nil
-                    if (myHum.WalkToPoint - myPos).Magnitude > 1 then myHum:MoveTo(myPos) end
-                    return
-                end
-
-            -- PRIORITAS 3: Perbaiki Generator
-            elseif completedGens < 5 and bestGenTarget then
-                targetPos = bestGenTarget
-                actionState = "Repairing"
-                
-            -- PRIORITAS 4: Lari ke Gerbang
-            elseif completedGens >= 5 then
-                if CachedMapObjects and CachedMapObjects.Gates then
-                    local shortestGate = 9999
-                    for _, gate in ipairs(CachedMapObjects.Gates) do
-                        local gatePos = gate:GetPivot().Position
-                        local dist = (gatePos - myPos).Magnitude
-                        if dist < shortestGate then
-                            shortestGate = dist; targetPos = gatePos
-                        end
-                    end
-                end
-                actionState = "Escaping"
-            end
-                        -- [SISTEM NOTIFIKASI AI]
-            if getgenv().LastAIState ~= actionState then
-                getgenv().LastAIState = actionState
-                
-                local notifIcons = {
-                    ["Evading"]   = "lucide:footprints",
-                    ["Healing"]   = "lucide:heart-handshake",
-                    ["Repairing"] = "lucide:wrench",
-                    ["Escaping"]  = "lucide:door-open",
-                    ["Idle"]      = "lucide:coffee"
-                }
-                
-                if actionState ~= "Idle" then
-                    WindUI:Notify({
-                        Title = "AI State: " .. string.upper(actionState),
-                        Content = "Mengalihkan rute prioritas AI ke: " .. actionState,
-                        Icon = notifIcons[actionState] or "lucide:bot",
-                        Duration = 3
-                    })
-                end
-            end
-            
-            getgenv().AIFinalTarget = targetPos
-
-            -- KALKULASI RUTE (ASYNC)
-            if targetPos then
-                local now = os.clock()
-                local lastPathCalc = getgenv().LastPathCalc or 0
-                local lastTargetPos = getgenv().LastTargetPos or v3()
-                
-                if (targetPos - lastTargetPos).Magnitude > 5 or (now - lastPathCalc > 1.5) then
-                    getgenv().LastPathCalc = now
-                    getgenv().LastTargetPos = targetPos
-                    
-                    task.spawn(function()
-                        pcall(function()
-                            local path = PathfindingService:CreatePath({ 
-                                AgentRadius = 2.5,  
-                                AgentHeight = 5, 
-                                AgentCanJump = true,
-                                WaypointSpacing = 4 
-                            })
-                            path:ComputeAsync(myPos, targetPos)
-                            
-                            if path.Status == Enum.PathStatus.Success then
-                                getgenv().CachedWaypoints = path:GetWaypoints()
-                                getgenv().CurrentWaypointIdx = 2 
-                            else
-                                getgenv().CachedWaypoints = nil
-                            end
-                        end)
-                    end)
-                end
-            else
-                getgenv().CachedWaypoints = nil
-                if (myHum.WalkToPoint - myPos).Magnitude > 1 then myHum:MoveTo(myPos) end
-            end
-        end)
-    end
-end)
-
--- =========================================================
--- [THREAD 2: KAKI AI] EKSEKUTOR PERGERAKAN (Berjalan Cepat & Halus)
--- =========================================================
-task.spawn(function()
-    -- [FIX STUTTER] Berjalan sangat cepat (0.05s) agar saat karakter menyentuh waypoint, langsung lanjut ke waypoint berikutnya tanpa jeda!
-    while task.wait(0.05) do
-        if not getgenv().RYEENZY_RUNNING then break end
-        if not AutoFarmBot then
-            continue
-        end
-        
-        pcall(function()
-            local myChar = LocalPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            local myHum = myChar and myChar:FindFirstChild("Humanoid")
-            if not myRoot or not myHum or myHum.Health <= 0 then return end
-
-            local waypoints = getgenv().CachedWaypoints
-            local idx = getgenv().CurrentWaypointIdx
-            local myPos = myRoot.Position
-            
-            -- 1. SISTEM BERJALAN MULUS
-            if waypoints and idx and idx <= #waypoints then
-                local nextPoint = waypoints[idx]
-                
-                -- [LOGIKA BARU] Kalkulasi jarak 2D (Abaikan sumbu Y) agar bot tidak nyangkut saat melewati tangga atau lereng
-                local distToWaypoint = (v3(nextPoint.Position.X, myPos.Y, nextPoint.Position.Z) - myPos).Magnitude
-                
-                -- Toleransi dilebarkan sedikit (4.5) agar bot bisa memotong tikungan dengan mulus
-                if distToWaypoint < 4.5 then
-                    getgenv().CurrentWaypointIdx = idx + 1
-                    if getgenv().CurrentWaypointIdx <= #waypoints then
-                        nextPoint = waypoints[getgenv().CurrentWaypointIdx]
-                    end
-                end
-                
-                if nextPoint then
-                    myHum:MoveTo(nextPoint.Position)
-                    if nextPoint.Action == Enum.PathWaypointAction.Jump then 
-                        myHum.Jump = true 
-                    end
-                end
-            elseif getgenv().AIFinalTarget then
-                myHum:MoveTo(getgenv().AIFinalTarget)
-            end
-            
-            -- ==========================================
-            -- 2. [LOGIKA DEWA] ANTI-STUCK SYSTEM V2
-            -- ==========================================
-            local nowTime = os.clock()
-            local lastBotPos = getgenv().LastBotPos or myPos
-            local lastBotTime = getgenv().LastBotTime or nowTime
-            
-            if getgenv().AIFinalTarget then
-                -- Jika dalam 1 detik pergerakan bot kurang dari 0.5 stud (Berarti nabrak tembok/sudut)
-                if (myPos - lastBotPos).Magnitude < 0.5 then
-                    if nowTime - lastBotTime > 1.0 then
-                        myHum.Jump = true
-                        myRoot.CFrame = myRoot.CFrame * cnew(math.random(-2, 2), 0, math.random(1, 3))
-                        getgenv().LastBotTime = nowTime + 0.5 
-                    end
-                else
-                    getgenv().LastBotPos = myPos
-                    getgenv().LastBotTime = nowTime
-                end
-            end
-        end)
-    end
-end)
 
 -- =========================================================
 -- EKSEKUSI WIPER & SPEED SYNC SETIAP KALI RESPAWN
