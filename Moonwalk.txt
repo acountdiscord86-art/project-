@@ -686,7 +686,8 @@ ParryRing.CFrame =
         0,
         0
     )
-ParryRing.Adornee = HumanoidRootPart
+-- Adornee di-sync di Heartbeat saat karakter tersedia
+ParryRing.Visible = false
 ParryRing.Parent = TargetGui
 
 ----------------------------------------------------------------
@@ -2001,10 +2002,11 @@ local function PressSkill()
 
                 if firesignal
                 and btn.MouseButton1Click then
-
-                    firesignal(
-                        btn.MouseButton1Click
-                    )
+                    pcall(function()
+                        firesignal(
+                            btn.MouseButton1Click
+                        )
+                    end)
                 end
             end)
         end
@@ -3908,6 +3910,9 @@ end
 
 local oldNamecall
 
+-- hookmetamethod hanya tersedia di executor tertentu (Synapse, Fluxus, dll)
+-- Delta Mobile tidak support → wrap dengan nil check agar tidak crash
+if hookmetamethod and newcclosure and checkcaller and getnamecallmethod then
 oldNamecall=
     hookmetamethod(
         game,
@@ -4430,6 +4435,7 @@ oldNamecall=
         )
     end)
 )
+end -- end hookmetamethod nil check
 
 ----------------------------------------------------------------
 -- KILLER: AUTO ATTACK LOGIC (LATENCY COMPENSATED & PCALL FREE)
@@ -4617,20 +4623,23 @@ local function AP_TriggerParry()
     local success = false
 
     -- METHOD 1: Fire button connections directly (Most reliable)
-    pcall(function()
-        for _, connection in pairs(getconnections(button.MouseButton1Click)) do
-            connection:Fire()
-            success = true
-        end
-        for _, connection in pairs(getconnections(button.MouseButton1Down)) do
-            connection:Fire()
-            success = true
-        end
-        for _, connection in pairs(getconnections(button.Activated)) do
-            connection:Fire()
-            success = true
-        end
-    end)
+    -- getconnections hanya ada di executor tertentu, guard agar tidak crash
+    if getconnections then
+        pcall(function()
+            for _, connection in pairs(getconnections(button.MouseButton1Click)) do
+                connection:Fire()
+                success = true
+            end
+            for _, connection in pairs(getconnections(button.MouseButton1Down)) do
+                connection:Fire()
+                success = true
+            end
+            for _, connection in pairs(getconnections(button.Activated)) do
+                connection:Fire()
+                success = true
+            end
+        end)
+    end
 
     -- METHOD 2: VirtualInputManager Touch (Fallback mobile)
     if not success then
