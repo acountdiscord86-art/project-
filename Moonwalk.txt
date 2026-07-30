@@ -3,6 +3,11 @@
 -- UI     : RYEENZY_HUB_template
 -- Fitur  : vd_fixed_no_ui_Version2
 -- Support: semua executor (Delta, Synapse, Krnl, dll)
+-- FIX v2 : nil-index guard di semua Vector3/CFrame ops
+--          getconnections per-event pcall
+--          SendTouchEvent pakai Enum.UserInputState
+--          Paragraph Desc→Content
+--          SpeedBoost base speed fix
 ----------------------------------------------------
 
 -- WINDUI LOADER
@@ -32,19 +37,18 @@ end
 -- ══════════════════════════════════════════════════════════
 local cloneref = (cloneref or clonereference or function(v) return v end)
 
-local Players            = game:GetService("Players")
-local RunService         = game:GetService("RunService")
-local StatsService       = game:GetService("Stats")
-local MarketplaceService = game:GetService("MarketplaceService")
-local TeleportService    = game:GetService("TeleportService")
-local UserInputService   = game:GetService("UserInputService")
-local SoundService       = game:GetService("SoundService")
-local HttpService        = game:GetService("HttpService")
-local VirtualUser        = game:GetService("VirtualUser")
-local Lighting           = cloneref(game:GetService("Lighting"))
+local Players             = game:GetService("Players")
+local RunService          = game:GetService("RunService")
+local StatsService        = game:GetService("Stats")
+local MarketplaceService  = game:GetService("MarketplaceService")
+local UserInputService    = game:GetService("UserInputService")
+local SoundService        = game:GetService("SoundService")
+local HttpService         = game:GetService("HttpService")
+local VirtualUser         = game:GetService("VirtualUser")
+local Lighting            = cloneref(game:GetService("Lighting"))
 local VirtualInputManager = cloneref(game:GetService("VirtualInputManager"))
-local GuiService         = cloneref(game:GetService("GuiService"))
-local ReplicatedStorage  = cloneref(game:GetService("ReplicatedStorage"))
+local GuiService          = cloneref(game:GetService("GuiService"))
+local ReplicatedStorage   = cloneref(game:GetService("ReplicatedStorage"))
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
@@ -52,14 +56,11 @@ local isMobile    = UserInputService.TouchEnabled and not UserInputService.Keybo
 
 -- ══════════════════════════════════════════════════════════
 -- EXECUTOR SAFETY GUARDS
--- Pastikan tidak crash di executor yang kurang lengkap
 -- ══════════════════════════════════════════════════════════
 local getgenv        = getgenv        or function() return _G end
 local setclipboard   = setclipboard   or nil
 local firesignal     = firesignal     or nil
-local getconnections = getconnections or nil
--- hookmetamethod, newcclosure, checkcaller, getnamecallmethod
--- di-guard di bawah dengan if-check sebelum dipakai
+local getconnections = getconnections or nil  -- nil-safe, dicek sebelum dipakai
 
 local fileSupported = (
     type(isfolder)   == "function" and
@@ -89,21 +90,21 @@ local function t_insert(t, v) table.insert(t, v) end
 -- ══════════════════════════════════════════════════════════
 -- GAME FEATURE STATE
 -- ══════════════════════════════════════════════════════════
-getgenv().AutoFarmSpeed              = 17
-getgenv().MoonwalkZigzagSpeed        = 11
-getgenv().MoonwalkBoostPower         = 1.08
-getgenv().MoonwalkEnabled            = false
-getgenv().MoonwalkZigzagAmount       = 48
-getgenv().ParryMatchup               = "Auto"
-getgenv().AimStrictness              = 1.3
-getgenv().ParryDelayOffset           = 0
-getgenv().AimbotSmoothness           = 8
-getgenv().AimbotPart                 = "Torso"
-getgenv().AimbotTrigger              = "Hold to Lock"
+getgenv().AutoFarmSpeed               = 17
+getgenv().MoonwalkZigzagSpeed         = 11
+getgenv().MoonwalkBoostPower          = 1.08
+getgenv().MoonwalkEnabled             = false
+getgenv().MoonwalkZigzagAmount        = 48
+getgenv().ParryMatchup                = "Auto"
+getgenv().AimStrictness               = 1.3
+getgenv().ParryDelayOffset            = 0
+getgenv().AimbotSmoothness            = 8
+getgenv().AimbotPart                  = "Torso"
+getgenv().AimbotTrigger               = "Hold to Lock"
 getgenv().GeneratorPerfectOffsetStart = 102
 getgenv().GeneratorPerfectOffsetEnd   = 108
-getgenv().AntiAura                   = false
-getgenv().isMobileFiring             = false
+getgenv().AntiAura                    = false
+getgenv().isMobileFiring              = false
 
 local SelfHeal          = false
 local KEY_TOGGLE        = Enum.KeyCode.R
@@ -170,7 +171,7 @@ local m_round  = math.round
 local s_format = string.format
 
 -- ══════════════════════════════════════════════════════════
--- UI CONFIG (dari template)
+-- CONFIG SYSTEM
 -- ══════════════════════════════════════════════════════════
 local configFolder = "RyeenzyHub"
 local configFile   = configFolder .. "/config.json"
@@ -222,7 +223,7 @@ config.execPoints = (config.execPoints or 0) + 1
 saveConfig(config)
 
 -- ══════════════════════════════════════════════════════════
--- THEME SYSTEM (dari template — tidak diubah)
+-- THEME SYSTEM
 -- ══════════════════════════════════════════════════════════
 local ThemeGradients = {
     Dark     = { a="#888888", b="#333333", c="#0a0a0a" },
@@ -279,7 +280,7 @@ local ThemeImages = {
 local function getThemeImgs(t) return ThemeImages[t] or ThemeImages.Dark end
 
 -- ══════════════════════════════════════════════════════════
--- PLAYER INFO HELPERS (dari template — tidak diubah)
+-- PLAYER INFO HELPERS
 -- ══════════════════════════════════════════════════════════
 local function getExecRole(pts)
     if pts <= 10 then return "Explorer" end
@@ -338,11 +339,11 @@ end
 
 local gameName = game.Name
 task.spawn(function()
-    local ok, info = pcall(function() return MarketplaceService:GetProductInfo(game.PlaceId) end)
+    local ok, info = pcall(function() return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId) end)
     if ok and info and info.Name then gameName = info.Name end
 end)
 
-local cachedHeadshot = nil
+local cachedHeadshot    = nil
 local cachedDevHeadshot = nil
 task.spawn(function()
     local ok, hs = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end)
@@ -414,8 +415,7 @@ local function applyCustomProfile()
     end
     local nf = getNameFrame()
     if nf then
-        local d = nf:FindFirstChild("DisplayName")
-        local u = nf:FindFirstChild("UserName")
+        local d = nf:FindFirstChild("DisplayName"); local u = nf:FindFirstChild("UserName")
         if d then d.Text = config.customName ~= "" and config.customName or LocalPlayer.DisplayName end
         if u then u.Text = config.customSubName ~= "" and config.customSubName or LocalPlayer.Name end
     end
@@ -488,15 +488,13 @@ local function notifyStartup(title, content, icon, duration)
 end
 
 -- ══════════════════════════════════════════════════════════
--- TABS (template tabs + game tabs)
+-- TABS
 -- ══════════════════════════════════════════════════════════
 local TabInfo = Window:Tab({
     Title="Information", Desc="Script information & credits",
     Icon="info", IconColor=getTabIconColor(config.theme),
     IconShape="Circle", IconThemed=false, Locked=false, ShowTabTitle=true, Border=true,
 })
-
--- GAME TABS
 local TabSurvivor = Window:Tab({
     Title="Survivor", Desc="Survivor features",
     Icon="shield", IconColor=getTabIconColor(config.theme),
@@ -527,7 +525,6 @@ local TabExtras = Window:Tab({
     Icon="star", IconColor=getTabIconColor(config.theme),
     IconShape="Circle", IconThemed=false, Locked=false, ShowTabTitle=true, Border=true,
 })
-
 local TabSettings = Window:Tab({
     Title="Settings", Desc="Script configuration",
     Icon="settings-2", IconColor=getTabIconColor(config.theme),
@@ -550,7 +547,8 @@ local function syncTabIconColors(themeName)
 end
 
 -- ══════════════════════════════════════════════════════════
--- TAB: INFORMATION (dari template — tidak diubah)
+-- TAB: INFORMATION
+-- FIX: Desc= → Content= di semua Paragraph
 -- ══════════════════════════════════════════════════════════
 local PFX = "rbxassetid://"
 local parPlayerCard = nil
@@ -559,7 +557,9 @@ local parDev        = nil
 local function updatePlayerCard(themeName)
     if not parPlayerCard then return end
     pcall(function()
-        if parPlayerCard.SetDesc then parPlayerCard:SetDesc(buildPlayerDesc(config.anonymous, themeName)) end
+        if parPlayerCard.SetDesc then
+            parPlayerCard:SetDesc(buildPlayerDesc(config.anonymous, themeName))
+        end
     end)
 end
 
@@ -567,15 +567,16 @@ local function buildInfoParagraphs(themeName)
     local acc = getThemeAccent(themeName)
     if parPlayerCard then updatePlayerCard(themeName) return end
     local playerImg = getHeadshot() or (PFX.."118704968198375")
+    -- FIX: Pakai Content= bukan Desc=
     parPlayerCard = TabInfo:Paragraph({
-        Title=config.anonymous and "Anonymous" or LocalPlayer.DisplayName,
-        Desc=buildPlayerDesc(config.anonymous, themeName),
+        Title   = config.anonymous and "Anonymous" or LocalPlayer.DisplayName,
+        Content = buildPlayerDesc(config.anonymous, themeName),
         Image=playerImg, ImageSize=60, ImageColor=acc, Transparent=true,
     })
     local devImg = getDevHeadshot() or (PFX.."118704968198375")
     parDev = TabInfo:Paragraph({
-        Title="Dev Profile",
-        Desc="RyeenzyExp\nStatus: Developer\nDevice: Mobile",
+        Title   = "Dev Profile",
+        Content = "RyeenzyExp\nStatus: Developer\nDevice: Mobile",
         Image=devImg, ImageSize=60, Transparent=true,
         Buttons={{
             Icon="link", Title="Copy Profile",
@@ -592,12 +593,27 @@ end
 buildInfoParagraphs(config.theme)
 
 -- ══════════════════════════════════════════════════════════
--- ESP & MAP CACHE (dari vd_fixed_no_ui_Version2)
+-- GAME VALUE HELPER (didefinisikan lebih awal — fix forward-ref)
+-- ══════════════════════════════════════════════════════════
+local function GetGameValue(obj, name)
+    if typeof(obj) ~= "Instance" then return nil end
+    local ok1, attr = pcall(function() return obj:GetAttribute(name) end)
+    if ok1 and attr ~= nil then return attr end
+    local child = obj:FindFirstChild(name)
+    if child and child:IsA("ValueBase") then return child.Value end
+    return nil
+end
+
+-- ══════════════════════════════════════════════════════════
+-- ESP & MAP CACHE
 -- ══════════════════════════════════════════════════════════
 local ESP_COLORS = {
-    Killer=Color3.fromRGB(255,93,108), Survivor=Color3.fromRGB(0,255,34),
-    Generator=Color3.fromRGB(200,100,0), Gate=Color3.fromRGB(255,255,255),
-    Pallet=Color3.fromRGB(53,189,166), Hook=Color3.fromRGB(252,116,116),
+    Killer    = Color3.fromRGB(255,93,108),
+    Survivor  = Color3.fromRGB(0,255,34),
+    Generator = Color3.fromRGB(200,100,0),
+    Gate      = Color3.fromRGB(255,255,255),
+    Pallet    = Color3.fromRGB(53,189,166),
+    Hook      = Color3.fromRGB(252,116,116),
 }
 local MaskNames = {
     Abysswalker="ABYSSWALKER", Cure="CURE", Hidden="HIDDEN", Killer="THE KILLER",
@@ -605,26 +621,28 @@ local MaskNames = {
 }
 local MaskColors = {
     Abysswalker=Color3.fromRGB(110,20,255), Cure=Color3.fromRGB(0,54,156),
-    Hidden=Color3.fromRGB(170,170,170), Killer=Color3.fromRGB(255,40,40),
-    Masked=Color3.fromRGB(255,90,20), Stalker=Color3.fromRGB(255,0,140),
-    Veil=Color3.fromRGB(0,140,255), Slasher=Color3.fromRGB(180,0,255),
+    Hidden=Color3.fromRGB(170,170,170),     Killer=Color3.fromRGB(255,40,40),
+    Masked=Color3.fromRGB(255,90,20),       Stalker=Color3.fromRGB(255,0,140),
+    Veil=Color3.fromRGB(0,140,255),         Slasher=Color3.fromRGB(180,0,255),
 }
 local CachedMapObjects = { Generators={}, Pallets={}, Hooks={}, Gates={} }
 local PrevESPState = { Generator=false, Hook=false, Pallet=false, Gate=false }
 
 local function UpdateMapCache()
     local map = workspace:FindFirstChild("Map"); if not map then return end
-    CachedMapObjects.Generators={}; CachedMapObjects.Pallets={}; CachedMapObjects.Hooks={}; CachedMapObjects.Gates={}
+    CachedMapObjects.Generators={}; CachedMapObjects.Pallets={}
+    CachedMapObjects.Hooks={};      CachedMapObjects.Gates={}
     local desc = map:GetDescendants()
     for i=1,#desc do
         local obj=desc[i]; local n=obj.Name
-        if n=="Generator" then table.insert(CachedMapObjects.Generators,obj)
-        elseif n=="Hook" then table.insert(CachedMapObjects.Hooks,obj)
-        elseif n=="Gate" then table.insert(CachedMapObjects.Gates,obj)
+        if n=="Generator"                    then table.insert(CachedMapObjects.Generators,obj)
+        elseif n=="Hook"                     then table.insert(CachedMapObjects.Hooks,obj)
+        elseif n=="Gate"                     then table.insert(CachedMapObjects.Gates,obj)
         elseif n=="Pallet" or n=="Palletwrong" then table.insert(CachedMapObjects.Pallets,obj) end
         if i%500==0 then task.wait() end
     end
-    PrevESPState.Generator=false; PrevESPState.Hook=false; PrevESPState.Pallet=false; PrevESPState.Gate=false
+    PrevESPState.Generator=false; PrevESPState.Hook=false
+    PrevESPState.Pallet=false;    PrevESPState.Gate=false
 end
 
 task.spawn(function()
@@ -641,9 +659,9 @@ task.spawn(function()
                     if descendantConn then descendantConn:Disconnect() end
                     descendantConn=currentMap.DescendantAdded:Connect(function(obj)
                         local n=obj.Name
-                        if n=="Generator" then table.insert(CachedMapObjects.Generators,obj)
-                        elseif n=="Hook" then table.insert(CachedMapObjects.Hooks,obj)
-                        elseif n=="Gate" then table.insert(CachedMapObjects.Gates,obj)
+                        if n=="Generator"                    then table.insert(CachedMapObjects.Generators,obj)
+                        elseif n=="Hook"                     then table.insert(CachedMapObjects.Hooks,obj)
+                        elseif n=="Gate"                     then table.insert(CachedMapObjects.Gates,obj)
                         elseif n=="Pallet" or n=="Palletwrong" then table.insert(CachedMapObjects.Pallets,obj) end
                     end)
                     notify("Map Loaded","Generator & Pallet terdeteksi. ESP aktif!","radar",4)
@@ -652,33 +670,45 @@ task.spawn(function()
         elseif not hasContents and not mapWasEmpty then
             mapWasEmpty=true
             if descendantConn then descendantConn:Disconnect(); descendantConn=nil end
-            CachedMapObjects.Generators={}; CachedMapObjects.Pallets={}; CachedMapObjects.Hooks={}; CachedMapObjects.Gates={}
+            CachedMapObjects.Generators={}; CachedMapObjects.Pallets={}
+            CachedMapObjects.Hooks={};      CachedMapObjects.Gates={}
             if ActiveGenerators then table.clear(ActiveGenerators) end
-            PrevESPState.Generator=false; PrevESPState.Hook=false; PrevESPState.Pallet=false; PrevESPState.Gate=false
+            PrevESPState.Generator=false; PrevESPState.Hook=false
+            PrevESPState.Pallet=false;    PrevESPState.Gate=false
         end
     end
 end)
 
 -- SCP ESP
-local SCPFolder=workspace:FindFirstChild("SCP_ESP") or Instance.new("Folder")
+local SCPFolder = workspace:FindFirstChild("SCP_ESP") or Instance.new("Folder")
 SCPFolder.Name="SCP_ESP"; SCPFolder.Parent=workspace
 local SCPCache={}; local SCPConnection=nil
+
 local function IsSCP(v)
     if not(v and v:IsA("Model")) then return false end
     local n=v.Name:lower()
-    return n=="scp" or n:match("^scp%d*$") or n:match("^scp[%-%_]?%d+$") or n:find("zombie") or n:find("monster") or n:find("infected") or n:find("mutant")
+    return n=="scp" or n:match("^scp%d*$") or n:match("^scp[%-%_]?%d+$")
+        or n:find("zombie") or n:find("monster") or n:find("infected") or n:find("mutant")
 end
-local function RemoveSCP(v) local h=SCPCache[v] if h then pcall(function()h:Destroy()end) end SCPCache[v]=nil end
+
+local function RemoveSCP(v)
+    local h=SCPCache[v]; if h then pcall(function()h:Destroy()end) end; SCPCache[v]=nil
+end
+
 local function CreateSCP(v)
     if not ESP_SCP or SCPCache[v] or not(v and v.Parent) or not IsSCP(v) then return end
-    local root=v:FindFirstChild("HumanoidRootPart",true) or v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart",true); if not root then return end
+    local root=v:FindFirstChild("HumanoidRootPart",true) or v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart",true)
+    if not root then return end
     local h=Instance.new("Highlight"); h.Name="SCPESP"; h.Adornee=v
-    h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop; h.FillColor=Color3.fromRGB(170,0,255); h.OutlineColor=Color3.fromRGB(255,220,255)
+    h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+    h.FillColor=Color3.fromRGB(170,0,255); h.OutlineColor=Color3.fromRGB(255,220,255)
     h.FillTransparency=0.78; h.OutlineTransparency=0.03; h.Parent=workspace; SCPCache[v]=h
     v.AncestryChanged:Connect(function(_,p) if not p then RemoveSCP(v) end end)
     local hum=v:FindFirstChildOfClass("Humanoid"); if hum then hum.Died:Connect(function() RemoveSCP(v) end) end
 end
+
 local function ScanSCP() for _,v in ipairs(workspace:GetChildren()) do if IsSCP(v) then CreateSCP(v) end end end
+
 local function ConnectSCP()
     if SCPConnection then SCPConnection:Disconnect() end
     SCPConnection=workspace.ChildAdded:Connect(function(v)
@@ -687,10 +717,12 @@ local function ConnectSCP()
     end)
 end
 ConnectSCP(); ScanSCP()
+
 task.spawn(function()
     while task.wait(0.7) do
         if not getgenv().RYEENZY_RUNNING then break end
-        if not ESP_SCP then for v in pairs(SCPCache) do RemoveSCP(v) end
+        if not ESP_SCP then
+            for v in pairs(SCPCache) do RemoveSCP(v) end
         else
             for v,h in pairs(SCPCache) do
                 if not(v and v.Parent and h and h.Parent) then RemoveSCP(v)
@@ -701,28 +733,41 @@ task.spawn(function()
     end
 end)
 
-local function GetGameValue(obj, name)
-    if typeof(obj)~="Instance" then return nil end
-    local attr=obj:GetAttribute(name); if attr~=nil then return attr end
-    local child=obj:FindFirstChild(name); if child and child:IsA("ValueBase") then return child.Value end
-    return nil
-end
-
+-- ══════════════════════════════════════════════════════════
+-- HIGHLIGHT HELPERS
+-- FIX: nil-guard di semua Position access
+-- ══════════════════════════════════════════════════════════
 local function ApplyHighlight(object, color)
-    local h=object:FindFirstChild("H")
+    if not object or not object.Parent then return end  -- FIX: guard
+    local h = object:FindFirstChild("H")
     if not h then
-        h=Instance.new("Highlight"); h.Name="H"; h.Adornee=object
+        h = Instance.new("Highlight"); h.Name="H"; h.Adornee=object
         h.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
-        h.FillTransparency=0.82; h.OutlineTransparency=0.03; h.LineThickness=2; h.Parent=workspace
+        h.FillTransparency=0.82; h.OutlineTransparency=0.03
+        h.LineThickness=2; h.Parent=workspace
     end
-    if h.FillColor~=color then h.FillColor=color; h.OutlineColor=color:Lerp(Color3.new(1,1,1),0.15) end
-    local root=(object:IsA("Model") and (object:FindFirstChild("HumanoidRootPart") or object.PrimaryPart)) or (object:IsA("BasePart") and object)
-    local myRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if h.FillColor ~= color then
+        h.FillColor=color; h.OutlineColor=color:Lerp(Color3.new(1,1,1),0.15)
+    end
+    -- FIX: cek root dan myRoot sebelum .Position
+    local root = nil
+    if object:IsA("Model") then
+        root = object:FindFirstChild("HumanoidRootPart") or object.PrimaryPart
+    elseif object:IsA("BasePart") then
+        root = object
+    end
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if root and myRoot then
-        local dist=(root.Position-myRoot.Position).Magnitude
-        if dist>120 then h.FillTransparency=0.92; h.OutlineTransparency=0
-        elseif dist>70 then h.FillTransparency=0.88; h.OutlineTransparency=0.02
-        else h.FillTransparency=0.82; h.OutlineTransparency=0.05 end
+        -- FIX: pcall agar tidak crash kalau Part sudah destroy
+        local ok, dist = pcall(function()
+            return (root.Position - myRoot.Position).Magnitude
+        end)
+        if ok then
+            if dist > 120 then h.FillTransparency=0.92; h.OutlineTransparency=0
+            elseif dist > 70 then h.FillTransparency=0.88; h.OutlineTransparency=0.02
+            else h.FillTransparency=0.82; h.OutlineTransparency=0.05 end
+        end
     end
     if not h.Enabled then h.Enabled=true end
 end
@@ -731,74 +776,117 @@ local function RemoveHighlight(object)
     if object then local h=object:FindFirstChild("H"); if h then h:Destroy() end end
 end
 
-local ESP_PlayerCache={}
+local ESP_PlayerCache = {}
 
 local function RemovePlayerESP(player)
-    local char=player.Character; if char then
-        RemoveHighlight(char)
-        local root=char:FindFirstChild("HumanoidRootPart")
-        if root then local tag=root:FindFirstChild("TagESP"); if tag then tag:Destroy() end end
-    end
+    local char=player.Character; if not char then return end
+    RemoveHighlight(char)
+    local root=char:FindFirstChild("HumanoidRootPart")
+    if root then local tag=root:FindFirstChild("TagESP"); if tag then tag:Destroy() end end
 end
 
 local function CreatePlayerESP(player, isKiller)
-    local char=player.Character
-    local root=char and char:FindFirstChild("HumanoidRootPart")
-    local hum=char and char:FindFirstChild("Humanoid")
-    if not root or not hum or hum.Health<=0 then RemovePlayerESP(player); ESP_PlayerCache[player.UserId]=nil; return end
-    local myRoot=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart"); if not myRoot then return end
-    local dist=m_floor((root.Position-myRoot.Position).Magnitude)
-    local color=isKiller and ESP_COLORS.Killer or ESP_COLORS.Survivor
-    local statusText=""
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum  = char and char:FindFirstChild("Humanoid")
+    if not root or not hum or hum.Health<=0 then
+        RemovePlayerESP(player); ESP_PlayerCache[player.UserId]=nil; return
+    end
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+
+    -- FIX: pcall di setiap .Position access
+    local ok, dist = pcall(function() return m_floor((root.Position-myRoot.Position).Magnitude) end)
+    if not ok then return end
+
+    local color = isKiller and ESP_COLORS.Killer or ESP_COLORS.Survivor
+    local statusText = ""
+
     if isKiller then
-        local detectedMask=char:GetAttribute("CachedMask") or char:GetAttribute("KillerType") or char:GetAttribute("SelectedKiller")
+        local detectedMask = char:GetAttribute("CachedMask")
+            or char:GetAttribute("KillerType") or char:GetAttribute("SelectedKiller")
             or GetGameValue(char,"SelectedKiller") or GetGameValue(player,"SelectedKiller")
             or GetGameValue(char,"Mask") or GetGameValue(player,"Mask") or char.Name
         if detectedMask then char:SetAttribute("CachedMask",detectedMask) end
-        statusText=MaskNames[detectedMask] or "KILLER"; color=MaskColors[detectedMask] or color
+        statusText = MaskNames[detectedMask] or "KILLER"
+        color = MaskColors[detectedMask] or color
     else
         local function IsActive(v) return v==true or(type(v)=="number" and v>0) end
-        local hooked=IsActive(GetGameValue(char,"IsHooked")) or IsActive(GetGameValue(player,"IsHooked"))
-        local carried=IsActive(GetGameValue(char,"Carried")) or IsActive(GetGameValue(char,"IsCarried")) or IsActive(GetGameValue(char,"Grabbed")) or IsActive(GetGameValue(player,"Carried"))
-        local knocked=IsActive(GetGameValue(char,"Knocked")) or IsActive(GetGameValue(char,"IsKnocked"))
-        if hooked then color=Color3.fromRGB(255,70,140); statusText="HOOKED"
-        elseif carried then color=Color3.fromRGB(190,90,255); statusText="CARRIED"
-        elseif knocked then color=Color3.fromRGB(255,170,0); statusText="KNOCKED"
+        local hooked  = IsActive(GetGameValue(char,"IsHooked")) or IsActive(GetGameValue(player,"IsHooked"))
+        local carried = IsActive(GetGameValue(char,"Carried")) or IsActive(GetGameValue(char,"IsCarried"))
+                     or IsActive(GetGameValue(char,"Grabbed")) or IsActive(GetGameValue(player,"Carried"))
+        local knocked = IsActive(GetGameValue(char,"Knocked")) or IsActive(GetGameValue(char,"IsKnocked"))
+        if hooked then       color=Color3.fromRGB(255,70,140);  statusText="HOOKED"
+        elseif carried then  color=Color3.fromRGB(190,90,255);  statusText="CARRIED"
+        elseif knocked then  color=Color3.fromRGB(255,170,0);   statusText="KNOCKED"
         elseif hum.Health<hum.MaxHealth then color=Color3.fromRGB(255,225,80); statusText="INJURED"
         else statusText=nil; color=ESP_COLORS.Survivor end
     end
-    ESP_PlayerCache[player.UserId]={dist=dist,status=statusText}
-    local showHighlight=isKiller and ESP_Killer_Highlight or ESP_Survivor_Highlight
+
+    ESP_PlayerCache[player.UserId] = {dist=dist, status=statusText}
+    local showHighlight = isKiller and ESP_Killer_Highlight or ESP_Survivor_Highlight
     if showHighlight then ApplyHighlight(char,color) else RemoveHighlight(char) end
-    local showName=isKiller and ESP_Killer_Name or ESP_Survivor_Name
-    local marker=root:FindFirstChild("TagESP")
-    if showName then if not marker then local f=Instance.new("Folder"); f.Name="TagESP"; f.Parent=root end
-    else if marker then marker:Destroy() end end
+    local showName = isKiller and ESP_Killer_Name or ESP_Survivor_Name
+    local marker = root:FindFirstChild("TagESP")
+    if showName then
+        if not marker then local f=Instance.new("Folder"); f.Name="TagESP"; f.Parent=root end
+    else
+        if marker then marker:Destroy() end
+    end
 end
 
-local GEN_COLOR_MID=Color3.fromRGB(255,140,0); local GEN_COLOR_END=Color3.fromRGB(0,255,120)
+local GEN_COLOR_MID = Color3.fromRGB(255,140,0)
+local GEN_COLOR_END = Color3.fromRGB(0,255,120)
+
 local function updateGeneratorProgress(generator)
     if not generator or not generator.Parent then return true end
-    local percent=GetGameValue(generator,"RepairProgress") or GetGameValue(generator,"Progress") or 0
-    if percent>=100 or not ESP_Generator then RemoveHighlight(generator); generator:SetAttribute("LastESPPercent",nil); return percent>=100 end
-    local rounded=math.floor(percent*10)/10
+    local percent = GetGameValue(generator,"RepairProgress") or GetGameValue(generator,"Progress") or 0
+    if percent>=100 or not ESP_Generator then
+        RemoveHighlight(generator); generator:SetAttribute("LastESPPercent",nil); return percent>=100
+    end
+    local rounded = math.floor(percent*10)/10
     if generator:GetAttribute("LastESPPercent")==rounded then return false end
     generator:SetAttribute("LastESPPercent",rounded)
-    local cp=math.clamp(percent,0,100)
-    local finalColor=cp<50 and ESP_COLORS.Generator:Lerp(GEN_COLOR_MID,cp/50) or GEN_COLOR_MID:Lerp(GEN_COLOR_END,(cp-50)/50)
+    local cp = math.clamp(percent,0,100)
+    local finalColor = cp<50
+        and ESP_COLORS.Generator:Lerp(GEN_COLOR_MID,cp/50)
+        or  GEN_COLOR_MID:Lerp(GEN_COLOR_END,(cp-50)/50)
     ApplyHighlight(generator,finalColor); return false
+end
+
+local cachedRayFilter = {}
+local function IsVisible(targetPart)
+    if not WallCheck then return true end
+    if not targetPart or not targetPart.Parent then return false end  -- FIX
+    local cam = workspace.CurrentCamera; if not cam then return true end
+    local origin = cam.CFrame.Position
+    local ok, direction = pcall(function() return targetPart.Position - origin end)
+    if not ok then return false end
+    local myChar = LocalPlayer.Character
+    table.clear(cachedRayFilter)
+    if cam     then table.insert(cachedRayFilter,cam)    end
+    if myChar  then table.insert(cachedRayFilter,myChar) end
+    aimRayParams.FilterDescendantsInstances = cachedRayFilter
+    local result = workspace:Raycast(origin,direction,aimRayParams)
+    if result then return result.Instance:IsDescendantOf(targetPart.Parent) end
+    return true
 end
 
 local function RefreshESP()
     if not workspace.CurrentCamera then return end
     for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LocalPlayer then
-            local isKiller=false; local team=p.Team
-            if team and team.Name then isKiller=string.find(string.lower(team.Name),"killer")~=nil end
-            local shouldESP=false
-            if isKiller and(ESP_Killer_Name or ESP_Killer_Highlight) then shouldESP=true
-            elseif not isKiller and(ESP_Survivor_Name or ESP_Survivor_Highlight) then shouldESP=true end
-            if shouldESP then CreatePlayerESP(p,isKiller) else RemovePlayerESP(p) end
+        if p ~= LocalPlayer then
+            local isKiller = false; local team = p.Team
+            if team and team.Name then isKiller = string.find(string.lower(team.Name),"killer") ~= nil end
+            local shouldESP = false
+            if isKiller and (ESP_Killer_Name or ESP_Killer_Highlight) then shouldESP=true
+            elseif not isKiller and (ESP_Survivor_Name or ESP_Survivor_Highlight) then shouldESP=true end
+            if shouldESP then
+                pcall(function() CreatePlayerESP(p,isKiller) end)  -- FIX: pcall
+            else
+                pcall(function() RemovePlayerESP(p) end)
+            end
         end
     end
     if not CachedMapObjects then return end
@@ -811,31 +899,26 @@ local function RefreshESP()
         PrevESPState.Generator=false
     end
     if ESP_Pallet then PrevESPState.Pallet=true
-        for i=#CachedMapObjects.Pallets,1,-1 do local p=CachedMapObjects.Pallets[i]; if not(p and p.Parent and p:IsDescendantOf(workspace)) then if p then local t=p:FindFirstChild("PalletTag"); if t then t:Destroy() end end t_remove(CachedMapObjects.Pallets,i) end end
-    elseif PrevESPState.Pallet then
-        for _,p in ipairs(CachedMapObjects.Pallets) do if p then local t=p:FindFirstChild("PalletTag"); if t then t:Destroy() end end end; PrevESPState.Pallet=false
-    end
+        for i=#CachedMapObjects.Pallets,1,-1 do local p=CachedMapObjects.Pallets[i]; if not(p and p.Parent and p:IsDescendantOf(workspace)) then t_remove(CachedMapObjects.Pallets,i) end end
+    elseif PrevESPState.Pallet then PrevESPState.Pallet=false end
     if ESP_Gate then PrevESPState.Gate=true
         for i=#CachedMapObjects.Gates,1,-1 do local g=CachedMapObjects.Gates[i]; if g and g.Parent then ApplyHighlight(g,ESP_COLORS.Gate) else t_remove(CachedMapObjects.Gates,i) end end
     elseif PrevESPState.Gate then
         for _,g in ipairs(CachedMapObjects.Gates) do if g and g.Parent then RemoveHighlight(g) end end; PrevESPState.Gate=false
     end
     if ESP_Hook then PrevESPState.Hook=true
-        for i=#CachedMapObjects.Hooks,1,-1 do local h=CachedMapObjects.Hooks[i]; if h and h.Parent then local m=h:FindFirstChild("Model"); if m then for _,p in ipairs(m:GetDescendants()) do if p:IsA("MeshPart") then ApplyHighlight(p,ESP_COLORS.Hook) end end else ApplyHighlight(h,ESP_COLORS.Hook) end else t_remove(CachedMapObjects.Hooks,i) end end
+        for i=#CachedMapObjects.Hooks,1,-1 do local h=CachedMapObjects.Hooks[i]; if h and h.Parent then
+            local m=h:FindFirstChild("Model")
+            if m then for _,p in ipairs(m:GetDescendants()) do if p:IsA("MeshPart") then ApplyHighlight(p,ESP_COLORS.Hook) end end
+            else ApplyHighlight(h,ESP_COLORS.Hook) end
+        else t_remove(CachedMapObjects.Hooks,i) end end
     elseif PrevESPState.Hook then
-        for _,h in ipairs(CachedMapObjects.Hooks) do if h and h.Parent then local m=h:FindFirstChild("Model"); if m then for _,p in ipairs(m:GetDescendants()) do if p:IsA("MeshPart") then RemoveHighlight(p) end end else RemoveHighlight(h) end end end; PrevESPState.Hook=false
+        for _,h in ipairs(CachedMapObjects.Hooks) do if h and h.Parent then
+            local m=h:FindFirstChild("Model")
+            if m then for _,p in ipairs(m:GetDescendants()) do if p:IsA("MeshPart") then RemoveHighlight(p) end end
+            else RemoveHighlight(h) end
+        end end; PrevESPState.Hook=false
     end
-end
-
-local cachedRayFilter={}
-local function IsVisible(targetPart)
-    if not WallCheck then return true end
-    local cam=workspace.CurrentCamera; local origin=cam.CFrame.Position
-    local direction=(targetPart.Position-origin); local myChar=LocalPlayer.Character
-    table.clear(cachedRayFilter); if cam then table.insert(cachedRayFilter,cam) end; if myChar then table.insert(cachedRayFilter,myChar) end
-    aimRayParams.FilterDescendantsInstances=cachedRayFilter
-    local result=workspace:Raycast(origin,direction,aimRayParams)
-    if result then return result.Instance:IsDescendantOf(targetPart.Parent) end; return true
 end
 
 local function ResetScope()
@@ -851,56 +934,96 @@ end
 
 -- ══════════════════════════════════════════════════════════
 -- TARGET FINDERS
+-- FIX: nil-guard di semua Position, pcall di magnitude ops
 -- ══════════════════════════════════════════════════════════
 local function GetClosestSilentTarget()
-    local camera=workspace.CurrentCamera; local center=camera.ViewportSize*0.5
+    local camera=workspace.CurrentCamera; if not camera then return nil end
+    local center=camera.ViewportSize*0.5
     local closest=nil; local shortest=SilentAimFOV or 250
     local myTeam=(LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
     if myTeam:find("killer") then return nil end
     for _,p in ipairs(Players:GetPlayers()) do
         if p==LocalPlayer or not p.Character then continue end
-        local enemyTeam=(p.Team and p.Team.Name:lower()) or ""; if not enemyTeam:find("killer") then continue end
-        local char=p.Character; local root=char:FindFirstChild("HumanoidRootPart"); local hum=char:FindFirstChildOfClass("Humanoid")
+        local enemyTeam=(p.Team and p.Team.Name:lower()) or ""
+        if not enemyTeam:find("killer") then continue end
+        local char=p.Character
+        local root=char:FindFirstChild("HumanoidRootPart")
+        local hum =char:FindFirstChildOfClass("Humanoid")
         if not(root and hum and hum.Health>0) then continue end
-        local pos,visible=camera:WorldToViewportPoint(root.Position); if not visible then continue end
+        -- FIX: pcall di WorldToViewportPoint
+        local ok1, pos, visible = pcall(function()
+            local p2,v2 = camera:WorldToViewportPoint(root.Position)
+            return p2, v2
+        end)
+        if not ok1 or not visible then continue end
         if WallCheck and not IsVisible(root) then continue end
-        local dist=(Vector2.new(pos.X,pos.Y)-center).Magnitude
+        local ok2, dist = pcall(function() return (Vector2.new(pos.X,pos.Y)-center).Magnitude end)
+        if not ok2 then continue end
         if dist<shortest then shortest=dist; closest=root end
     end
     return closest
 end
 
 local function GetClosestPlayer(currentTarget)
-    local camera=workspace.CurrentCamera; local center=camera.ViewportSize*0.5
-    local shortest=AimRadius; local myTeam=(LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
-    local isKiller=myTeam:find("killer"); local camPos=camera.CFrame.Position
+    local camera=workspace.CurrentCamera; if not camera then return nil end
+    local center=camera.ViewportSize*0.5
+    local shortest=AimRadius
+    local myTeam=(LocalPlayer.Team and LocalPlayer.Team.Name:lower()) or ""
+    local isKiller=myTeam:find("killer")
+    local camPos=camera.CFrame.Position
     if currentTarget and currentTarget.Parent then
         local hum=currentTarget.Parent:FindFirstChildOfClass("Humanoid")
         if hum and hum.Health>0 then
-            local pos,visible=camera:WorldToViewportPoint(currentTarget.Position)
-            if visible then
-                local dist=(Vector2.new(pos.X,pos.Y)-center).Magnitude
-                if dist<=AimRadius and(not WallCheck or IsVisible(currentTarget)) then return currentTarget end
+            local ok, pos, visible = pcall(function()
+                local p,v = camera:WorldToViewportPoint(currentTarget.Position)
+                return p, v
+            end)
+            if ok and visible then
+                local ok2, dist = pcall(function() return (Vector2.new(pos.X,pos.Y)-center).Magnitude end)
+                if ok2 and dist<=AimRadius and (not WallCheck or IsVisible(currentTarget)) then
+                    return currentTarget
+                end
             end
         end
     end
     for _,p in ipairs(Players:GetPlayers()) do
         if p==LocalPlayer or not p.Character then continue end
-        local char=p.Character; local hum=char:FindFirstChild("Humanoid")
+        local char=p.Character
+        local hum=char:FindFirstChild("Humanoid")
         if not hum or hum.Health<=0 then continue end
-        local enemyTeam=(p.Team and p.Team.Name:lower()) or ""; local enemyKiller=enemyTeam:find("killer")
-        if isKiller and enemyKiller then continue end; if not isKiller and not enemyKiller then continue end
-        if isKiller then if GetGameValue(char,"Knocked") or GetGameValue(char,"IsHooked") then continue end end
+        local enemyTeam=(p.Team and p.Team.Name:lower()) or ""
+        local enemyKiller=enemyTeam:find("killer")
+        if isKiller and enemyKiller then continue end
+        if not isKiller and not enemyKiller then continue end
+        if isKiller then
+            if GetGameValue(char,"Knocked") or GetGameValue(char,"IsHooked") then continue end
+        end
         local targetPart=TargetPartCache[char]
         if not targetPart or not targetPart.Parent then
-            targetPart=(getgenv().AimbotPart=="Head" and char:FindFirstChild("Head")) or (getgenv().AimbotPart=="Body (RootPart)" and char:FindFirstChild("HumanoidRootPart")) or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+            targetPart = (getgenv().AimbotPart=="Head" and char:FindFirstChild("Head"))
+                      or (getgenv().AimbotPart=="Body (RootPart)" and char:FindFirstChild("HumanoidRootPart"))
+                      or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+                      or char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
             TargetPartCache[char]=targetPart
         end
-        if not targetPart then continue end
-        if(targetPart.Position-camPos).Magnitude>AimDistance then continue end
-        local pos,visible=camera:WorldToViewportPoint(targetPart.Position); if not visible then continue end
-        local dist=(Vector2.new(pos.X,pos.Y)-center).Magnitude
-        if dist<shortest then if not WallCheck or IsVisible(targetPart) then shortest=dist; CachedTarget=targetPart end end
+        if not targetPart or not targetPart.Parent then continue end
+        -- FIX: pcall di semua magnitude/position ops
+        local ok1, inRange = pcall(function()
+            return (targetPart.Position-camPos).Magnitude <= AimDistance
+        end)
+        if not ok1 or not inRange then continue end
+        local ok2, pos, visible = pcall(function()
+            local p,v = camera:WorldToViewportPoint(targetPart.Position)
+            return p, v
+        end)
+        if not ok2 or not visible then continue end
+        local ok3, dist = pcall(function() return (Vector2.new(pos.X,pos.Y)-center).Magnitude end)
+        if not ok3 then continue end
+        if dist<shortest then
+            if not WallCheck or IsVisible(targetPart) then
+                shortest=dist; CachedTarget=targetPart
+            end
+        end
     end
     return CachedTarget
 end
@@ -917,18 +1040,34 @@ local function PressSkill()
         if btn and btn:IsA("GuiObject") then
             local pos=btn.AbsolutePosition; local sz=btn.AbsoluteSize; local ins=GuiService:GetGuiInset()
             local x=pos.X+(sz.X/2)+ins.X; local y=pos.Y+(sz.Y/2)+ins.Y
-            pcall(function() VirtualInputManager:SendTouchEvent(8822,Enum.UserInputState.Begin.Value,x,y); task.wait(); VirtualInputManager:SendTouchEvent(8822,Enum.UserInputState.End.Value,x,y) end)
+            -- FIX: Enum.UserInputState bukan angka mentah
+            pcall(function()
+                VirtualInputManager:SendTouchEvent(8822,Enum.UserInputState.Begin,x,y)
+                task.wait()
+                VirtualInputManager:SendTouchEvent(8822,Enum.UserInputState.End,x,y)
+            end)
             pcall(function() if firesignal and btn.MouseButton1Click then firesignal(btn.MouseButton1Click) end end)
         end
     else
-        pcall(function() VirtualInputManager:SendKeyEvent(true,Enum.KeyCode.Space,false,game); task.wait(); VirtualInputManager:SendKeyEvent(false,Enum.KeyCode.Space,false,game) end)
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
+            task.wait()
+            VirtualInputManager:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
+        end)
     end
 end
 
 local function GetSkillCheck()
     for _,guiName in ipairs({"SkillCheckPromptGui","SkillCheckPromptGui-con"}) do
         local gui=PlayerGui:FindFirstChild(guiName,true)
-        if gui then local check=gui:FindFirstChild("Check",true); if check and check.Visible then local line=check:FindFirstChild("Line",true); local goal=check:FindFirstChild("Goal",true); if line and goal then return line,goal end end end
+        if gui then
+            local check=gui:FindFirstChild("Check",true)
+            if check and check.Visible then
+                local line=check:FindFirstChild("Line",true)
+                local goal=check:FindFirstChild("Goal",true)
+                if line and goal then return line,goal end
+            end
+        end
     end
 end
 
@@ -940,10 +1079,15 @@ GenConnection=RunService.Heartbeat:Connect(function()
     local goalVelocity=math.abs(gr-LastGoalRotation); LastGoalRotation=gr
     local dynamicOffset=math.clamp(goalVelocity*0.35,0,8)
     local startPos,endPos
-    if AutoGeneratorMode=="Neutral" then startPos=(gr+96-dynamicOffset)%360; endPos=(gr+122+dynamicOffset)%360
-    else startPos=(gr+(getgenv().GeneratorPerfectOffsetStart or 102)-dynamicOffset)%360; endPos=(gr+(getgenv().GeneratorPerfectOffsetEnd or 109)+dynamicOffset)%360 end
+    if AutoGeneratorMode=="Neutral" then
+        startPos=(gr+96-dynamicOffset)%360; endPos=(gr+122+dynamicOffset)%360
+    else
+        startPos=(gr+(getgenv().GeneratorPerfectOffsetStart or 102)-dynamicOffset)%360
+        endPos  =(gr+(getgenv().GeneratorPerfectOffsetEnd   or 109)+dynamicOffset)%360
+    end
     local inside=false
-    if startPos>endPos then inside=(lr>=startPos or lr<=endPos) else inside=(lr>=startPos and lr<=endPos) end
+    if startPos>endPos then inside=(lr>=startPos or lr<=endPos)
+    else inside=(lr>=startPos and lr<=endPos) end
     if inside then LastSkillHit=tick(); PressSkill() end
 end)
 
@@ -953,8 +1097,14 @@ task.spawn(function()
         local line=GetSkillCheck()
         if not line and tick()-LastSkillHit>1.1 then
             pcall(function()
-                local char=LocalPlayer.Character; local hum=char and char:FindFirstChildOfClass("Humanoid"); local root=char and char:FindFirstChild("HumanoidRootPart")
-                if char and hum and root then root.Anchored=false; hum.PlatformStand=false; hum.AutoRotate=true; hum.Sit=false; hum:ChangeState(Enum.HumanoidStateType.Running) end
+                local char=LocalPlayer.Character
+                local hum=char and char:FindFirstChildOfClass("Humanoid")
+                local root=char and char:FindFirstChild("HumanoidRootPart")
+                if char and hum and root then
+                    root.Anchored=false; hum.PlatformStand=false
+                    hum.AutoRotate=true; hum.Sit=false
+                    hum:ChangeState(Enum.HumanoidStateType.Running)
+                end
             end)
         end
     end
@@ -963,8 +1113,12 @@ end)
 local function TriggerAntiStuck()
     pcall(function()
         local char=workspace:FindFirstChild(LocalPlayer.Name) or LocalPlayer.Character
-        local hum=char and char:FindFirstChildOfClass("Humanoid"); local root=char and char:FindFirstChild("HumanoidRootPart")
-        pcall(function() local remotes=ReplicatedStorage:FindFirstChild("Remotes"); if remotes then local h=remotes:FindFirstChild("Healing"); local r=h and h:FindFirstChild("Reset"); if r then r:FireServer() end end end)
+        local hum=char and char:FindFirstChildOfClass("Humanoid")
+        local root=char and char:FindFirstChild("HumanoidRootPart")
+        pcall(function()
+            local remotes=ReplicatedStorage:FindFirstChild("Remotes")
+            if remotes then local h=remotes:FindFirstChild("Healing"); local r=h and h:FindFirstChild("Reset"); if r then r:FireServer() end end
+        end)
         if hum and root then
             root.Anchored=false; hum.PlatformStand=false; hum.AutoRotate=true; hum.Sit=false
             hum:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -973,24 +1127,49 @@ local function TriggerAntiStuck()
             local badStates={"Stunned","IsStunned","Healing","IsHealing","Repairing","IsRepairing","Interacting","Attacking","Using","Busy","Action"}
             for _,v in ipairs(badStates) do
                 if char:GetAttribute(v)~=nil then char:SetAttribute(v,false) end
-                local obj=char:FindFirstChild(v); if obj and obj:IsA("ValueBase") then pcall(function() if typeof(obj.Value)=="boolean" then obj.Value=false elseif typeof(obj.Value)=="number" then obj.Value=0 end end) end
+                local obj=char:FindFirstChild(v)
+                if obj and obj:IsA("ValueBase") then
+                    pcall(function()
+                        if typeof(obj.Value)=="boolean" then obj.Value=false
+                        elseif typeof(obj.Value)=="number" then obj.Value=0 end
+                    end)
+                end
             end
-            local map=workspace:FindFirstChild("Map"); if map then
+            local map=workspace:FindFirstChild("Map")
+            if map then
                 local genFolder=map:FindFirstChild("new Generators") or map:FindFirstChild("Generators")
                 if genFolder then
                     local nearestGen,nearestDist
-                    for _,gen in ipairs(genFolder:GetChildren()) do local part=gen:FindFirstChildWhichIsA("BasePart",true); if part then local dist=(root.Position-part.Position).Magnitude; if not nearestDist or dist<nearestDist then nearestDist=dist; nearestGen=part end end end
-                    if nearestGen and nearestDist<=15 then local dir=(root.Position-nearestGen.Position).Unit; if dir.Magnitude<=0 then dir=root.CFrame.LookVector end; root.CFrame=CFrame.new(root.Position+(dir*20),root.Position+(dir*20)+root.CFrame.LookVector) end
+                    for _,gen in ipairs(genFolder:GetChildren()) do
+                        local part=gen:FindFirstChildWhichIsA("BasePart",true)
+                        if part then
+                            -- FIX: pcall di magnitude
+                            local ok,dist=pcall(function() return (root.Position-part.Position).Magnitude end)
+                            if ok and (not nearestDist or dist<nearestDist) then nearestDist=dist; nearestGen=part end
+                        end
+                    end
+                    if nearestGen and nearestDist and nearestDist<=15 then
+                        local ok,dir=pcall(function() return (root.Position-nearestGen.Position).Unit end)
+                        if ok and dir then
+                            if dir.Magnitude<=0 then dir=root.CFrame.LookVector end
+                            root.CFrame=CFrame.new(root.Position+(dir*20),root.Position+(dir*20)+root.CFrame.LookVector)
+                        end
+                    end
                 end
             end
             task.wait(); hum:ChangeState(Enum.HumanoidStateType.Running); hum.Jump=true
-            local cam=workspace.CurrentCamera; if cam and cam.CameraType~=Enum.CameraType.Custom then cam.CameraType=Enum.CameraType.Custom; cam.CameraSubject=hum end
+            local cam=workspace.CurrentCamera
+            if cam and cam.CameraType~=Enum.CameraType.Custom then
+                cam.CameraType=Enum.CameraType.Custom; cam.CameraSubject=hum
+            end
         end
     end)
 end
 
 -- ══════════════════════════════════════════════════════════
--- AUTO PARRY (dari vd_fixed_no_ui_Version2)
+-- AUTO PARRY
+-- FIX: getconnections per-event pcall
+-- FIX: SendTouchEvent Enum.UserInputState
 -- ══════════════════════════════════════════════════════════
 local AP_KillerAttackAnimations = {
     "132817836308238","82666958311998","129784271201071","139369275981139",
@@ -1004,7 +1183,14 @@ local AP_KillerAttackAnimations = {
     "135002183282873",
 }
 
-local AP_State = { LastParryTime=0, ParryCooldown=2.5, IsParrying=false, ParryDelay=0.15, ParryRange=15, CooldownThreshold=0.9 }
+local AP_State = {
+    LastParryTime    = 0,
+    ParryCooldown    = 2.5,
+    IsParrying       = false,
+    ParryDelay       = 0.15,
+    ParryRange       = 15,
+    CooldownThreshold= 0.9,
+}
 
 local function AP_GetParryButton()
     local gui=LocalPlayer:FindFirstChild("PlayerGui"); if not gui then return nil end
@@ -1017,16 +1203,24 @@ end
 local function AP_IsParryReady()
     local button=AP_GetParryButton(); if not button then return false end
     local bar=button:FindFirstChild("Bar"); if not bar then return true end
-    return bar.Size.X.Scale>=AP_State.CooldownThreshold
+    return bar.Size.X.Scale >= AP_State.CooldownThreshold
 end
 
 local function AP_IsKillerAttacking(killerChar)
     if not killerChar then return false end
     local hum=killerChar:FindFirstChildOfClass("Humanoid"); if not hum then return false end
     local animator=hum:FindFirstChildOfClass("Animator"); if not animator then return false end
-    for _,track in pairs(animator:GetPlayingAnimationTracks()) do
-        local id=(track.Animation.AnimationId or ""):match("%d+")
-        if id then for _,attackId in pairs(AP_KillerAttackAnimations) do if id==attackId then return true end end end
+    local ok, tracks = pcall(function() return animator:GetPlayingAnimationTracks() end)
+    if not ok then return false end
+    for _,track in pairs(tracks) do
+        local ok2, id = pcall(function()
+            return (track.Animation.AnimationId or ""):match("%d+")
+        end)
+        if ok2 and id then
+            for _,attackId in pairs(AP_KillerAttackAnimations) do
+                if id==attackId then return true end
+            end
+        end
     end
     return false
 end
@@ -1037,10 +1231,13 @@ local function AP_GetNearestKiller()
     local nearestKiller=nil; local nearestDistance=math.huge
     for _,player in pairs(Players:GetPlayers()) do
         if player~=LocalPlayer and player.Team and player.Team.Name:lower():find("killer") then
-            local kChar=player.Character; if kChar then
-                local kRoot=kChar:FindFirstChild("HumanoidRootPart"); if kRoot then
-                    local dist=(kRoot.Position-root.Position).Magnitude
-                    if dist<nearestDistance then nearestDistance=dist; nearestKiller=kChar end
+            local kChar=player.Character
+            if kChar then
+                local kRoot=kChar:FindFirstChild("HumanoidRootPart")
+                if kRoot then
+                    -- FIX: pcall di magnitude
+                    local ok,dist=pcall(function() return (kRoot.Position-root.Position).Magnitude end)
+                    if ok and dist<nearestDistance then nearestDistance=dist; nearestKiller=kChar end
                 end
             end
         end
@@ -1051,24 +1248,56 @@ end
 local function AP_TriggerParry()
     local button=AP_GetParryButton(); if not button then return false end
     local success=false
-    -- METHOD 1: getconnections
-    if getconnections then
-        pcall(function()
-            for _,c in pairs(getconnections(button.MouseButton1Click)) do c:Fire(); success=true end
-            for _,c in pairs(getconnections(button.MouseButton1Down)) do c:Fire(); success=true end
-            for _,c in pairs(getconnections(button.Activated)) do c:Fire(); success=true end
-        end)
+
+    -- METHOD 1: getconnections per-event dengan pcall terpisah
+    if type(getconnections)=="function" then
+        local events = {
+            button.MouseButton1Click,
+            button.MouseButton1Down,
+            button.Activated,
+        }
+        for _,event in ipairs(events) do
+            pcall(function()
+                local ok, conns = pcall(getconnections, event)
+                if ok and conns then
+                    for _,c in pairs(conns) do
+                        pcall(function() c:Fire() end)
+                        success=true
+                    end
+                end
+            end)
+        end
     end
-    -- METHOD 2: VirtualInputManager touch
+
+    -- METHOD 2: VirtualInputManager Touch — FIX: Enum.UserInputState
     if not success then
         pcall(function()
-            local p=button.AbsolutePosition; local s=button.AbsoluteSize; local ins=GuiService:GetGuiInset()
+            local p=button.AbsolutePosition; local s=button.AbsoluteSize
+            local ins=GuiService:GetGuiInset()
             local cx=p.X+(s.X/2)+ins.X; local cy=p.Y+(s.Y/2)+ins.Y
-            VirtualInputManager:SendTouchEvent(8823,0,cx,cy); task.wait(0.05); VirtualInputManager:SendTouchEvent(8823,2,cx,cy)
+            VirtualInputManager:SendTouchEvent(8823,Enum.UserInputState.Begin,cx,cy)
+            task.wait(0.05)
+            VirtualInputManager:SendTouchEvent(8823,Enum.UserInputState.End,cx,cy)
             success=true
         end)
     end
-    if success then AP_State.LastParryTime=tick(); AP_State.IsParrying=true; task.spawn(function() task.wait(0.5); AP_State.IsParrying=false end) end
+
+    -- METHOD 3: fireclick / firetouchinterest fallback
+    if not success then
+        pcall(function()
+            if type(fireclick)=="function" then
+                fireclick(button); success=true
+            elseif type(firetouchinterest)=="function" then
+                firetouchinterest(button,LocalPlayer,0); task.wait(0.05)
+                firetouchinterest(button,LocalPlayer,1); success=true
+            end
+        end)
+    end
+
+    if success then
+        AP_State.LastParryTime=tick(); AP_State.IsParrying=true
+        task.spawn(function() task.wait(0.5); AP_State.IsParrying=false end)
+    end
     return success
 end
 
@@ -1082,7 +1311,8 @@ task.spawn(function()
                 for _,p in ipairs(Players:GetPlayers()) do
                     local tname=p.Team and p.Team.Name:lower() or ""
                     if tname:find("killer") and p.Character then
-                        local kChar=p.Character; local stunVal=GetGameValue(kChar,"Stunned") or GetGameValue(kChar,"IsStunned")
+                        local kChar=p.Character
+                        local stunVal=GetGameValue(kChar,"Stunned") or GetGameValue(kChar,"IsStunned")
                         local isStunned=stunVal==true or(type(stunVal)=="number" and stunVal>0)
                         if isStunned and not killerStunStates[p.UserId] then
                             notify("KILLER STUNNED!",p.Name.." berhasil stunned!!","dizzy",3)
@@ -1091,50 +1321,58 @@ task.spawn(function()
                     end
                 end
             end)
-        else if next(killerStunStates)~=nil then table.clear(killerStunStates) end end
+        else
+            if next(killerStunStates)~=nil then table.clear(killerStunStates) end
+        end
     end
 end)
 
 -- ══════════════════════════════════════════════════════════
--- NAMECALL HOOK
--- Guard: hanya jalan di executor yang support
+-- NAMECALL HOOK — guard semua executor functions
 -- ══════════════════════════════════════════════════════════
 local oldNamecall
 if hookmetamethod and newcclosure and checkcaller and getnamecallmethod then
     oldNamecall = hookmetamethod(game,"__namecall",newcclosure(function(self,...)
         local method=getnamecallmethod()
-        if checkcaller() or method~="FireServer" or typeof(self)~="Instance" then return oldNamecall(self,...) end
-        local args={...}; local n=tostring(self):lower()
-        -- SELF HEAL
-        if SelfHeal and n:find("healevent") then
-            local char=LocalPlayer.Character; local root=char and char:FindFirstChild("HumanoidRootPart"); local hum=char and char:FindFirstChildOfClass("Humanoid")
-            if root and hum and hum.Health>0 then args[1]=root; if args[2]==nil then args[2]=true end; return oldNamecall(self,unpack(args)) end
+        if checkcaller() or method~="FireServer" or typeof(self)~="Instance" then
+            return oldNamecall(self,...)
         end
-        -- DOUBLE DAMAGE
+        local args={...}; local n=tostring(self):lower()
+        if SelfHeal and n:find("healevent") then
+            local char=LocalPlayer.Character
+            local root=char and char:FindFirstChild("HumanoidRootPart")
+            local hum=char and char:FindFirstChildOfClass("Humanoid")
+            if root and hum and hum.Health>0 then
+                args[1]=root; if args[2]==nil then args[2]=true end
+                return oldNamecall(self,unpack(args))
+            end
+        end
         if DoubleDamageGen and n:find("breakgenevent") then
             local team=LocalPlayer.Team
             if team and team.Name:lower():find("killer") then
                 local saved=table.clone(args); local result=oldNamecall(self,unpack(saved))
                 task.spawn(function()
                     for i=1,4 do task.wait(0.08); pcall(function()oldNamecall(self,unpack(saved))end) end
-                    local char=LocalPlayer.Character; local hum=char and char:FindFirstChildOfClass("Humanoid"); local root=char and char:FindFirstChild("HumanoidRootPart")
-                    if hum and root then root.Anchored=false; hum.PlatformStand=false; hum.AutoRotate=true; hum.Sit=false; hum:ChangeState(Enum.HumanoidStateType.Running) end
+                    local char=LocalPlayer.Character
+                    local hum=char and char:FindFirstChildOfClass("Humanoid")
+                    local root=char and char:FindFirstChild("HumanoidRootPart")
+                    if hum and root then
+                        root.Anchored=false; hum.PlatformStand=false
+                        hum.AutoRotate=true; hum.Sit=false
+                        hum:ChangeState(Enum.HumanoidStateType.Running)
+                    end
                 end)
                 return result
             end
         end
-        -- SILENT ACTIONS
         if SilentActions then
             for _,w in ipairs({"noise","scream","vaultalert","spotted","alert","ping","loud","notify","notification","sound"}) do
                 local fa=typeof(args[1])=="string" and args[1]:lower() or ""
                 if n:find(w) or(fa~="" and fa:find(w)) then return end
             end
         end
-        -- ANTI LOGGER
         if AntiLogger and(n:find("log") or n:find("error") or n:find("report") or n:find("anticheat") or n:find("ban")) then return end
-        -- ANTI FALL
         if AntiFallDamage and(n:find("falldamage") or n:find("fall") or n:find("ragdollfall")) then return end
-        -- ANTI AURA
         if getgenv().AntiAura then
             getgenv().AuraRemoteCache=getgenv().AuraRemoteCache or {}
             local cache=getgenv().AuraRemoteCache; local key=tostring(self)
@@ -1147,22 +1385,29 @@ if hookmetamethod and newcclosure and checkcaller and getnamecallmethod then
             end
             if cache[key] then return end
         end
-        -- SILENT AIM PISTOL
         if SilentAimPistol and method=="FireServer" and n:find("fire") then
             local team=LocalPlayer.Team; local survivor=not(team and team.Name:lower():find("killer"))
             if survivor then
-                local char=LocalPlayer.Character; local myRoot=char and char:FindFirstChild("HumanoidRootPart"); local tool=char and char:FindFirstChildOfClass("Tool")
+                local char=LocalPlayer.Character
+                local myRoot=char and char:FindFirstChild("HumanoidRootPart")
+                local tool=char and char:FindFirstChildOfClass("Tool")
                 if not(myRoot and tool) then return oldNamecall(self,...) end
-                local firing=UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or(UserInputService.TouchEnabled and getgenv().isMobileFiring)
+                local firing=UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+                    or(UserInputService.TouchEnabled and getgenv().isMobileFiring)
                 if not firing then return oldNamecall(self,...) end
                 local target=GetClosestSilentTarget()
                 if target and target.Parent then
-                    local vel=target.AssemblyLinearVelocity or Vector3.zero; if vel.Magnitude>45 then vel=vel.Unit*45 end
-                    local ping=0.08; pcall(function() ping=StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()/1000 end); ping=math.clamp(ping,0.05,0.18)
+                    local vel=target.AssemblyLinearVelocity or Vector3.zero
+                    if vel.Magnitude>45 then vel=vel.Unit*45 end
+                    local ping=0.08
+                    pcall(function() ping=StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()/1000 end)
+                    ping=math.clamp(ping,0.05,0.18)
                     local predicted=target.Position+(vel*(0.11+ping))
                     local dir=(predicted-workspace.CurrentCamera.CFrame.Position).Unit*1000
                     for i,v in ipairs(args) do if typeof(v)=="Vector3" then args[i]=dir; break end end
-                    task.spawn(function() pcall(function() workspace.CurrentCamera.CFrame=CFrame.lookAt(workspace.CurrentCamera.CFrame.Position,predicted) end) end)
+                    task.spawn(function()
+                        pcall(function() workspace.CurrentCamera.CFrame=CFrame.lookAt(workspace.CurrentCamera.CFrame.Position,predicted) end)
+                    end)
                     return oldNamecall(self,unpack(args))
                 end
             end
@@ -1179,22 +1424,35 @@ task.spawn(function()
     while task.wait(0.15) do
         if not getgenv().RYEENZY_RUNNING then break end
         if not AutoAttack then continue end
-        local myChar=LocalPlayer.Character; local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart"); local myHum=myChar and myChar:FindFirstChild("Humanoid")
+        local myChar=LocalPlayer.Character
+        local myRoot=myChar and myChar:FindFirstChild("HumanoidRootPart")
+        local myHum=myChar and myChar:FindFirstChild("Humanoid")
         if not myRoot or not myHum or myHum.Health<=0 then continue end
-        local myTeam=LocalPlayer.Team and LocalPlayer.Team.Name:lower() or ""; if not myTeam:find("killer") then continue end
-        local isCarrying=GetGameValue(myChar,"Carrying") or GetGameValue(myChar,"IsCarrying"); local isStunned=GetGameValue(myChar,"Stunned"); if isCarrying or isStunned then continue end
+        local myTeam=LocalPlayer.Team and LocalPlayer.Team.Name:lower() or ""
+        if not myTeam:find("killer") then continue end
+        local isCarrying=GetGameValue(myChar,"Carrying") or GetGameValue(myChar,"IsCarrying")
+        local isStunned=GetGameValue(myChar,"Stunned")
+        if isCarrying or isStunned then continue end
         local targetFound=false; local players=Players:GetPlayers()
         for i=1,#players do
-            local p=players[i]; if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local p=players[i]
+            if p~=LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                 local enemyTeam=p.Team and p.Team.Name:lower() or ""
                 if not enemyTeam:find("killer") then
-                    local enemyChar=p.Character; local enemyHum=enemyChar:FindFirstChild("Humanoid")
+                    local enemyChar=p.Character
+                    local enemyHum=enemyChar:FindFirstChild("Humanoid")
                     if enemyHum and enemyHum.Health>0 then
-                        local isKnocked=GetGameValue(enemyChar,"Knocked"); local isHooked=GetGameValue(enemyChar,"IsHooked")
+                        local isKnocked=GetGameValue(enemyChar,"Knocked")
+                        local isHooked=GetGameValue(enemyChar,"IsHooked")
                         if not isKnocked and not isHooked then
-                            local dist=(enemyChar.HumanoidRootPart.Position-myRoot.Position).Magnitude
-                            local effectiveRange=enemyHum.MoveDirection.Magnitude>0 and(AttackRange+3) or AttackRange
-                            if dist<=effectiveRange then targetFound=true; break end
+                            -- FIX: pcall di magnitude
+                            local ok,dist=pcall(function()
+                                return (enemyChar.HumanoidRootPart.Position-myRoot.Position).Magnitude
+                            end)
+                            if ok then
+                                local effectiveRange=enemyHum.MoveDirection.Magnitude>0 and(AttackRange+3) or AttackRange
+                                if dist<=effectiveRange then targetFound=true; break end
+                            end
                         end
                     end
                 end
@@ -1204,10 +1462,14 @@ task.spawn(function()
         if targetFound and(now-lastAttackStrike>0.6) then
             lastAttackStrike=now
             if not SearchedAttackRemote then
-                local remotes=ReplicatedStorage:FindFirstChild("Remotes"); local attacks=remotes and(remotes:FindFirstChild("Attacks") or remotes:FindFirstChild("attacks") or remotes:FindFirstChild("Attack"))
-                if attacks then CachedBasicAttack=attacks:FindFirstChild("BasicAttack") or attacks:FindFirstChild("basicattack") end; SearchedAttackRemote=true
+                local remotes=ReplicatedStorage:FindFirstChild("Remotes")
+                local attacks=remotes and(remotes:FindFirstChild("Attacks") or remotes:FindFirstChild("attacks") or remotes:FindFirstChild("Attack"))
+                if attacks then CachedBasicAttack=attacks:FindFirstChild("BasicAttack") or attacks:FindFirstChild("basicattack") end
+                SearchedAttackRemote=true
             end
-            if CachedBasicAttack then CachedBasicAttack:FireServer(false); task.wait(0.05); CachedBasicAttack:FireServer(true) end
+            if CachedBasicAttack then
+                CachedBasicAttack:FireServer(false); task.wait(0.05); CachedBasicAttack:FireServer(true)
+            end
         end
     end
 end)
@@ -1265,14 +1527,14 @@ TabCombat:Toggle({ Title="Aimbot", Desc="Lock aim ke target", Icon="crosshair", 
     Callback=function(v) Aimbot=v; if not v then CachedTarget=nil end end })
 TabCombat:Dropdown({ Title="Aimbot Part", Desc="Pilih part target",
     Values={
-        {Title="Head",   Icon="user", Callback=function() getgenv().AimbotPart="Head"           end},
-        {Title="Torso",  Icon="user", Callback=function() getgenv().AimbotPart="Torso"          end},
-        {Title="Body",   Icon="user", Callback=function() getgenv().AimbotPart="Body (RootPart)"end},
+        {Title="Head",  Icon="user", Callback=function() getgenv().AimbotPart="Head"            end},
+        {Title="Torso", Icon="user", Callback=function() getgenv().AimbotPart="Torso"           end},
+        {Title="Body",  Icon="user", Callback=function() getgenv().AimbotPart="Body (RootPart)" end},
     }, Flag="F_AimPart" })
 TabCombat:Dropdown({ Title="Aimbot Mode",
     Values={
-        {Title="Hold to Lock",       Icon="mouse-pointer-click", Callback=function() getgenv().AimbotTrigger="Hold to Lock"        end},
-        {Title="Auto Lock (Always)", Icon="lock",                Callback=function() getgenv().AimbotTrigger="Auto Lock (Always)"  end},
+        {Title="Hold to Lock",       Icon="mouse-pointer-click", Callback=function() getgenv().AimbotTrigger="Hold to Lock"       end},
+        {Title="Auto Lock (Always)", Icon="lock",                Callback=function() getgenv().AimbotTrigger="Auto Lock (Always)" end},
     }, Flag="F_AimTrigger" })
 TabCombat:Slider({ Title="Aim Radius (FOV)", Desc="Radius lingkaran aim",
     Value={Min=30,Max=350,Default=60}, Step=5, Flag="F_AimRadius",
@@ -1328,17 +1590,21 @@ TabGenerator:Toggle({ Title="Auto Generator", Desc="Auto skill check generator",
     Callback=function(v) AutoGenerator=v end })
 TabGenerator:Dropdown({ Title="SkillCheck Mode",
     Values={
-        {Title="Perfect", Icon="star", Callback=function() AutoGeneratorMode="Perfect"; getgenv().GeneratorPerfectOffsetStart=102; getgenv().GeneratorPerfectOffsetEnd=108 end},
+        {Title="Perfect", Icon="star",   Callback=function() AutoGeneratorMode="Perfect"; getgenv().GeneratorPerfectOffsetStart=102; getgenv().GeneratorPerfectOffsetEnd=108 end},
         {Title="Neutral", Icon="circle", Callback=function() AutoGeneratorMode="Neutral"; getgenv().GeneratorPerfectOffsetStart=102; getgenv().GeneratorPerfectOffsetEnd=114 end},
     }, Flag="F_GenMode" })
-TabGenerator:Slider({ Title="Aim Strictness", Desc="Akurasi prediksi killer (auto parry)",
+TabGenerator:Slider({ Title="Aim Strictness", Desc="Akurasi prediksi killer",
     Value={Min=0.5,Max=3,Default=1.3}, Step=0.1, Flag="F_AimStrict",
     Callback=function(v) getgenv().AimStrictness=math.clamp(type(v)=="table" and(v.Value or 1.3) or v,0.5,3) end })
 
 -- TAB: EXTRAS
 TabExtras:Section({ Title="Moonwalk" })
 TabExtras:Toggle({ Title="Moonwalk", Desc="Zigzag otomatis dodge killer", Icon="orbit", Value=false, Flag="F_Moonwalk",
-    Callback=function(v) getgenv().MoonwalkEnabled=v; if not v then local c=LocalPlayer.Character; local h=c and c:FindFirstChildOfClass("Humanoid"); if h then h.AutoRotate=true end end; notify("Moonwalk",v and"Enabled"or"Disabled","orbit",3) end })
+    Callback=function(v)
+        getgenv().MoonwalkEnabled=v
+        if not v then local c=LocalPlayer.Character; local h=c and c:FindFirstChildOfClass("Humanoid"); if h then h.AutoRotate=true end end
+        notify("Moonwalk",v and"Enabled"or"Disabled","orbit",3)
+    end })
 TabExtras:Slider({ Title="Zigzag Speed", Desc="Kecepatan zigzag (5-50)",
     Value={Min=5,Max=50,Default=11}, Step=1, Flag="F_ZigzagSpeed",
     Callback=function(v) getgenv().MoonwalkZigzagSpeed=type(v)=="table" and(v.Value or 11) or v end })
@@ -1350,7 +1616,7 @@ TabExtras:Keybind({ Title="Toggle Moonwalk Key", Desc="Keybind toggle moonwalk",
     Callback=function(v) KEY_TOGGLE=typeof(v)=="EnumItem" and v or Enum.KeyCode[tostring(v)] or Enum.KeyCode.R end })
 
 -- ══════════════════════════════════════════════════════════
--- TAB: SETTINGS (dari template — tidak diubah)
+-- TAB: SETTINGS
 -- ══════════════════════════════════════════════════════════
 local SolsTag; local FpsTag
 
@@ -1382,8 +1648,8 @@ end
 TabSettings:Dropdown({ Title="UI Theme", Desc="Changes theme, tags & open button", Values=buildThemeDropdownValues() })
 TabSettings:Dropdown({ Title="Window Button Style", Desc="Topbar button style",
     Values={
-        {Title="Mac",     Desc="Colored circle buttons", Icon="circle",  Callback=function() config.buttonsType="Mac"     saveConfig(config) notify("Button Style","Re-execute to apply.","circle",4)  end},
-        {Title="Default", Desc="Standard icon buttons",  Icon="square",  Callback=function() config.buttonsType="Default" saveConfig(config) notify("Button Style","Re-execute to apply.","square",4)  end},
+        {Title="Mac",     Desc="Colored circle buttons", Icon="circle", Callback=function() config.buttonsType="Mac"     saveConfig(config) notify("Button Style","Re-execute to apply.","circle",4) end},
+        {Title="Default", Desc="Standard icon buttons",  Icon="square", Callback=function() config.buttonsType="Default" saveConfig(config) notify("Button Style","Re-execute to apply.","square",4) end},
     }})
 
 TabSettings:Section({ Title="Window Style" })
@@ -1430,7 +1696,12 @@ TabSettings:Keybind({Title="Toggle UI",Desc="Keybind to open/close the window",V
 
 -- TAB: CONFIG
 TabConfig:Section({Title="Configuration Manager"})
-TabConfig:Paragraph({Title="How it works",Desc="Save stores all flagged settings.\nLoad restores them.\nDelete removes the saved file.",Transparent=true})
+-- FIX: Content= bukan Desc=
+TabConfig:Paragraph({
+    Title   = "How it works",
+    Content = "Save stores all flagged settings.\nLoad restores them.\nDelete removes the saved file.",
+    Transparent=true
+})
 TabConfig:Button({Title="Save Config",Desc="Save all current settings to file",Icon="save",Color=Color3.fromRGB(34,139,34),
     Callback=function() local ok,err=pcall(function() assert(RyeenzyConfig,"ConfigManager not supported"); RyeenzyConfig:Save() end); if ok then notify("Config","Configuration saved successfully!","save",3) else notify("Config","Save failed: "..tostring(err),"alert-circle",4) end end})
 TabConfig:Button({Title="Load Config",Desc="Load and apply saved settings",Icon="folder-open",Color=Color3.fromRGB(30,100,200),
@@ -1439,7 +1710,7 @@ TabConfig:Button({Title="Delete Config",Desc="Delete the saved configuration fil
     Callback=function() local ok,err=pcall(function() assert(RyeenzyConfig,"ConfigManager not supported"); RyeenzyConfig:Delete() end); if ok then notify("Config","Configuration deleted.","trash-2",3) else notify("Config","Delete failed: "..tostring(err),"alert-circle",4) end end})
 
 -- ══════════════════════════════════════════════════════════
--- OPEN BUTTON & TAGS (dari template)
+-- OPEN BUTTON & TAGS
 -- ══════════════════════════════════════════════════════════
 Window:EditOpenButton({
     Title="RYEENZY", Icon="activity", CornerRadius=UDim.new(0,12), StrokeThickness=2,
@@ -1464,77 +1735,142 @@ end)
 
 -- ══════════════════════════════════════════════════════════
 -- MAIN RENDER LOOP
+-- FIX: SpeedBoost pakai base speed 17, bukan currentWalkSpeed
+-- FIX: semua Vector/CFrame ops di-pcall
 -- ══════════════════════════════════════════════════════════
-local CurrentMoonwalkYaw=0; local CurrentMoonwalkSway=0
+local CurrentMoonwalkYaw  = 0
+local CurrentMoonwalkSway = 0
 
 t_insert(getgenv().RYEENZY_CONNECTIONS, RunService.RenderStepped:Connect(function(dt)
+    if not startupComplete then return end  -- FIX: jangan jalan sebelum startup selesai
     local myChar=LocalPlayer.Character; if not myChar then return end
-    local myRoot=myChar:FindFirstChild("HumanoidRootPart"); local myHum=myChar:FindFirstChild("Humanoid"); local camera=workspace.CurrentCamera
-    if not myRoot or not myHum or not camera then return end; if myHum.Health<=0 then return end
+    local myRoot=myChar:FindFirstChild("HumanoidRootPart")
+    local myHum=myChar:FindFirstChild("Humanoid")
+    local camera=workspace.CurrentCamera
+    if not myRoot or not myHum or not camera then return end
+    if myHum.Health<=0 then return end
+
     -- MOONWALK
     if getgenv().MoonwalkEnabled then
         if myHum.AutoRotate then myHum.AutoRotate=false end
-        local look=camera.CFrame.LookVector; local targetYaw=math.deg(math.atan2(look.X,look.Z))+180
-        local diff=(targetYaw-CurrentMoonwalkYaw+180)%360-180
-        CurrentMoonwalkYaw=CurrentMoonwalkYaw+(diff*(0.22*math.clamp(dt*60,0,3)))
-        local moving=myHum.MoveDirection.Magnitude>0.01; local sway=0
-        if moving then sway=math.sin(time()*(getgenv().MoonwalkZigzagSpeed or 11))*(getgenv().MoonwalkZigzagAmount or 48) end
-        CurrentMoonwalkSway=CurrentMoonwalkSway+(sway-CurrentMoonwalkSway)*0.38
-        myRoot.CFrame=CFrame.new(myRoot.Position)*CFrame.Angles(0,math.rad(CurrentMoonwalkYaw+CurrentMoonwalkSway),0)
-        if moving then myHum:Move(myHum.MoveDirection*(getgenv().MoonwalkBoostPower or 1.08),false) end
-    else if not myHum.AutoRotate then myHum.AutoRotate=true end end
+        pcall(function()
+            local look=camera.CFrame.LookVector
+            local targetYaw=math.deg(math.atan2(look.X,look.Z))+180
+            local diff=(targetYaw-CurrentMoonwalkYaw+180)%360-180
+            CurrentMoonwalkYaw=CurrentMoonwalkYaw+(diff*(0.22*math.clamp(dt*60,0,3)))
+            local moving=myHum.MoveDirection.Magnitude>0.01; local sway=0
+            if moving then sway=math.sin(time()*(getgenv().MoonwalkZigzagSpeed or 11))*(getgenv().MoonwalkZigzagAmount or 48) end
+            CurrentMoonwalkSway=CurrentMoonwalkSway+(sway-CurrentMoonwalkSway)*0.38
+            myRoot.CFrame=CFrame.new(myRoot.Position)*CFrame.Angles(0,math.rad(CurrentMoonwalkYaw+CurrentMoonwalkSway),0)
+            if moving then myHum:Move(myHum.MoveDirection*(getgenv().MoonwalkBoostPower or 1.08),false) end
+        end)
+    else
+        if not myHum.AutoRotate then myHum.AutoRotate=true end
+    end
+
     -- AIMBOT
     if Aimbot then
-        local now=time()
-        if now-lastRenderCheck>0.25 then cachedIsCarrying=GetGameValue(myChar,"Carrying") or GetGameValue(myChar,"IsCarrying") or false; lastRenderCheck=now end
-        if not cachedIsCarrying then
-            if now-LastTargetCheck>0.12 then CachedTarget=GetClosestPlayer(CachedTarget); LastTargetCheck=now end
-            if CachedTarget and(not CachedTarget.Parent or not CachedTarget:IsDescendantOf(workspace)) then CachedTarget=nil end
-            local target=CachedTarget
-            if target and target.Parent then
-                local firing=(getgenv().AimbotTrigger or "Hold to Lock")=="Auto Lock (Always)"
-                if not firing then firing=UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or getgenv().isMobileFiring==true end
-                if firing then local targetPos=target.Position; local smooth=math.clamp(dt*(tonumber(getgenv().AimbotSmoothness) or 8),0.08,0.28); camera.CFrame=camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position,targetPos),smooth) end
+        pcall(function()
+            local now=time()
+            if now-lastRenderCheck>0.25 then
+                cachedIsCarrying=GetGameValue(myChar,"Carrying") or GetGameValue(myChar,"IsCarrying") or false
+                lastRenderCheck=now
             end
-        else CachedTarget=nil end
+            if not cachedIsCarrying then
+                if now-LastTargetCheck>0.12 then CachedTarget=GetClosestPlayer(CachedTarget); LastTargetCheck=now end
+                if CachedTarget and(not CachedTarget.Parent or not CachedTarget:IsDescendantOf(workspace)) then CachedTarget=nil end
+                local target=CachedTarget
+                if target and target.Parent then
+                    local firing=(getgenv().AimbotTrigger or "Hold to Lock")=="Auto Lock (Always)"
+                    if not firing then
+                        firing=UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+                            or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+                            or getgenv().isMobileFiring==true
+                    end
+                    if firing then
+                        -- FIX: pcall di CFrame.lookAt
+                        pcall(function()
+                            local targetPos=target.Position
+                            local smooth=math.clamp(dt*(tonumber(getgenv().AimbotSmoothness) or 8),0.08,0.28)
+                            camera.CFrame=camera.CFrame:Lerp(CFrame.lookAt(camera.CFrame.Position,targetPos),smooth)
+                        end)
+                    end
+                end
+            else
+                CachedTarget=nil
+            end
+        end)
     end
 end))
 
 RunService:BindToRenderStep("SmoothFOV",Enum.RenderPriority.Camera.Value+1,function()
-    if CustomCameraFOV and workspace.CurrentCamera then workspace.CurrentCamera.FieldOfView=CameraFOVValue end
+    if CustomCameraFOV and workspace.CurrentCamera then
+        workspace.CurrentCamera.FieldOfView=CameraFOVValue
+    end
 end)
 
 -- ══════════════════════════════════════════════════════════
 -- HEARTBEAT
+-- FIX: SpeedBoost pakai base 17, bukan currentWalkSpeed (loop naik terus)
+-- FIX: pcall di semua posisi Vector ops
 -- ══════════════════════════════════════════════════════════
-local CachedHBRemotes={}; local SearchedHBRemotes=false
+local CachedHBRemotes = {}; local SearchedHBRemotes = false
 
 t_insert(getgenv().RYEENZY_CONNECTIONS, RunService.Heartbeat:Connect(function(dt)
     if not getgenv().RYEENZY_RUNNING then return end
-    local now=os.clock(); local myChar=LocalPlayer.Character; if not myChar then return end
-    local myHum=myChar:FindFirstChildOfClass("Humanoid"); local myRoot=myChar:FindFirstChild("HumanoidRootPart")
+    local now=os.clock()
+    local myChar=LocalPlayer.Character; if not myChar then return end
+    local myHum=myChar:FindFirstChildOfClass("Humanoid")
+    local myRoot=myChar:FindFirstChild("HumanoidRootPart")
     if not myHum or not myRoot then return end
-    local function IsStatusActive(val) return val==true or(type(val)=="number" and val>0) end
-    local myTeam=LocalPlayer.Team and LocalPlayer.Team.Name:lower() or ""; local isKiller=myTeam:find("killer")~=nil
+
+    local myTeam=LocalPlayer.Team and LocalPlayer.Team.Name:lower() or ""
+    local isKiller=myTeam:find("killer")~=nil
+
     if now-LastESPRefresh>0.35 then LastESPRefresh=now; pcall(function()RefreshESP()end) end
-    closestKillerDist=999; local isKillerRunning=false; local players=Players:GetPlayers()
+
+    closestKillerDist=999
+    local players=Players:GetPlayers()
     for i=1,#players do
-        local p=players[i]; if p~=LocalPlayer and p.Character then
-            local eChar=p.Character; local eRoot=eChar:FindFirstChild("HumanoidRootPart")
+        local p=players[i]
+        if p~=LocalPlayer and p.Character then
+            local eChar=p.Character
+            local eRoot=eChar:FindFirstChild("HumanoidRootPart")
             if eRoot then
                 local teamName=p.Team and p.Team.Name:lower() or ""
                 if string.find(teamName,"killer") then
-                    local dist=(eRoot.Position-myRoot.Position).Magnitude
-                    if dist<closestKillerDist then closestKillerDist=dist; local eHum=eChar:FindFirstChildOfClass("Humanoid"); if eHum and eHum.MoveDirection.Magnitude>0 then isKillerRunning=true end end
-                    if HitboxExpander then local ts=v3(HitboxSize,HitboxSize,HitboxSize); if eRoot.Size~=ts then pcall(function()eRoot.Size=ts; eRoot.Transparency=0.9; eRoot.Material=Enum.Material.ForceField; eRoot.Color=Color3.fromRGB(255,0,0); eRoot.Massless=false; eRoot.CanCollide=false end) end
-                    else if m_round(eRoot.Size.X)~=2 then pcall(function()eRoot.Size=v3(2,2,1); eRoot.Transparency=1; eRoot.Material=Enum.Material.Plastic; eRoot.Massless=false; eRoot.CanCollide=false end) end end
+                    -- FIX: pcall di magnitude
+                    local ok,dist=pcall(function() return (eRoot.Position-myRoot.Position).Magnitude end)
+                    if ok and dist<closestKillerDist then closestKillerDist=dist end
+                    if HitboxExpander then
+                        local ts=v3(HitboxSize,HitboxSize,HitboxSize)
+                        if eRoot.Size~=ts then
+                            pcall(function()
+                                eRoot.Size=ts; eRoot.Transparency=0.9
+                                eRoot.Material=Enum.Material.ForceField
+                                eRoot.Color=Color3.fromRGB(255,0,0)
+                                eRoot.Massless=false; eRoot.CanCollide=false
+                            end)
+                        end
+                    else
+                        if m_round(eRoot.Size.X)~=2 then
+                            pcall(function()
+                                eRoot.Size=v3(2,2,1); eRoot.Transparency=1
+                                eRoot.Material=Enum.Material.Plastic
+                                eRoot.Massless=false; eRoot.CanCollide=false
+                            end)
+                        end
+                    end
                 end
             end
         end
     end
+
     local warnMarker=myRoot:FindFirstChild("KillerWarn")
-    if WarnKiller and closestKillerDist<=60 then if not warnMarker then local f=Instance.new("Folder"); f.Name="KillerWarn"; f.Parent=myRoot end
+    if WarnKiller and closestKillerDist<=60 then
+        if not warnMarker then local f=Instance.new("Folder"); f.Name="KillerWarn"; f.Parent=myRoot end
     elseif warnMarker then warnMarker:Destroy() end
+
     -- AUTO PARRY
     if AutoParry then
         pcall(function()
@@ -1550,24 +1886,47 @@ t_insert(getgenv().RYEENZY_CONNECTIONS, RunService.Heartbeat:Connect(function(dt
             end
         end)
     end
+
     if not SearchedHBRemotes then
         local remotes=ReplicatedStorage:FindFirstChild("Remotes")
         if remotes then
-            CachedHBRemotes.HealEvent=remotes:FindFirstChild("HealEvent",true) or remotes:FindFirstChild("RequestHeal",true) or remotes:FindFirstChild("ReviveEvent",true)
+            CachedHBRemotes.HealEvent=remotes:FindFirstChild("HealEvent",true)
+                or remotes:FindFirstChild("RequestHeal",true)
+                or remotes:FindFirstChild("ReviveEvent",true)
         end
         SearchedHBRemotes=true
     end
-    local isDoingCriticalAction=false
-    for _,track in ipairs(myHum:GetPlayingAnimationTracks()) do
-        if track.Animation then local animName=track.Animation.Name:lower(); if animName:find("hook") or animName:find("grab") or animName:find("pickup") or animName:find("place") then isDoingCriticalAction=true; break end end
-    end
+
+    -- SPEED BOOST
+    -- FIX: Pakai BASE SPEED 17, bukan currentWalkSpeed (mencegah speed naik terus tiap frame)
     if not isKiller and myHum.Health>0 then
-        local isImmobilized=IsStatusActive(GetGameValue(myChar,"IsHooked")) or IsStatusActive(GetGameValue(myChar,"Carried")) or myChar:GetAttribute("IsHooked") or myChar:GetAttribute("Carried") or myChar:GetAttribute("Grabbed")
+        local function IsStatusActive(val) return val==true or(type(val)=="number" and val>0) end
+        local isImmobilized = IsStatusActive(GetGameValue(myChar,"IsHooked"))
+            or IsStatusActive(GetGameValue(myChar,"Carried"))
+            or myChar:GetAttribute("IsHooked") or myChar:GetAttribute("Carried")
+            or myChar:GetAttribute("Grabbed")
+        local isDoingCriticalAction=false
+        for _,track in ipairs(myHum:GetPlayingAnimationTracks()) do
+            if track.Animation then
+                local animName=track.Animation.Name:lower()
+                if animName:find("hook") or animName:find("grab") or animName:find("pickup") or animName:find("place") then
+                    isDoingCriticalAction=true; break
+                end
+            end
+        end
         if not isImmobilized and not isDoingCriticalAction and myHum.MoveDirection.Magnitude>0 then
-            local currentWalkSpeed=myHum.WalkSpeed; local desiredSpeed=currentWalkSpeed
-            if SpeedBoost then local pct=math.clamp(tonumber(BoostSpeed) or 0,0,150); desiredSpeed=desiredSpeed+(desiredSpeed*(pct/100)) end
-            local speedDiff=desiredSpeed-currentWalkSpeed
-            if speedDiff>0 then pcall(function()myRoot.CFrame=myRoot.CFrame+(myHum.MoveDirection*(speedDiff*dt))end) end
+            if SpeedBoost then
+                -- FIX: base 17 (bukan currentWalkSpeed) agar tidak compound tiap frame
+                local BASE_SPEED = 17
+                local pct        = math.clamp(tonumber(BoostSpeed) or 0, 0, 150)
+                local desiredSpd = BASE_SPEED + (BASE_SPEED * (pct / 100))
+                local speedDiff  = desiredSpd - myHum.WalkSpeed
+                if speedDiff > 0 then
+                    pcall(function()
+                        myRoot.CFrame = myRoot.CFrame + (myHum.MoveDirection * (speedDiff * dt))
+                    end)
+                end
+            end
         end
     end
 end))
@@ -1588,17 +1947,23 @@ end)
 -- ══════════════════════════════════════════════════════════
 t_insert(getgenv().RYEENZY_CONNECTIONS, LocalPlayer.CharacterAdded:Connect(function(char)
     local hum=char:WaitForChild("Humanoid",5)
-    if hum and SpeedBoost then hum.WalkSpeed=17+(17*((tonumber(BoostSpeed) or 0)/100)) end
+    if hum and SpeedBoost then
+        hum.WalkSpeed=17+(17*((tonumber(BoostSpeed) or 0)/100))
+    end
 end))
 
 t_insert(getgenv().RYEENZY_CONNECTIONS, Players.PlayerRemoving:Connect(function(player)
     SilentTarget=nil; ResetScope()
     if ESP_PlayerCache and ESP_PlayerCache[player.UserId] then ESP_PlayerCache[player.UserId]=nil end
-    if player.Character then local root=player.Character:FindFirstChild("HumanoidRootPart"); if root then local tag=root:FindFirstChild("TagESP"); if tag then tag:Destroy() end end end
+    if player.Character then
+        local root=player.Character:FindFirstChild("HumanoidRootPart")
+        if root then local tag=root:FindFirstChild("TagESP"); if tag then tag:Destroy() end end
+    end
+    TargetPartCache = {}  -- FIX: clear cache saat player keluar
 end))
 
 -- ══════════════════════════════════════════════════════════
--- INIT (dari template)
+-- INIT
 -- ══════════════════════════════════════════════════════════
 pcall(function() TabInfo:Select() end)
 pcall(function() Window:SetIconSize(47) end)
