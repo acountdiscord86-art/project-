@@ -1,1 +1,1606 @@
+--[[
+╔══════════════════════════════════════════════════════════════════╗
+║          ⚡ RYEENZY | HUB — Violence Distrik Edition            ║
+║  Game   : CURE — Distrik Kekerasan                              ║
+║  UI     : WindUI (MacOS Dark Theme)                             ║
+║  Toggle : K                                                     ║
+╚══════════════════════════════════════════════════════════════════╝
+]]
 
+-- ════════════════════════════════════════════════════════════════
+--  SERVICES
+-- ════════════════════════════════════════════════════════════════
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local VirtualUser      = game:GetService("VirtualUser")
+local Workspace        = game:GetService("Workspace")
+local HttpService      = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LP     = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local Mouse  = LP:GetMouse()
+
+-- ════════════════════════════════════════════════════════════════
+--  STATE TABLE
+-- ════════════════════════════════════════════════════════════════
+local S = {
+    -- Player
+    NoClip        = false,
+    Fly           = false,
+    FlySpeed      = 60,
+    SpeedHack     = false,
+    SpeedValue    = 50,
+    InfJump       = false,
+    AntiAFK       = true,
+
+    -- Survivor
+    AutoParry     = false,
+    ParryRange    = 15,
+    FaceKillerAngle = 90,
+    ParryDelay    = 0.05,
+    SilentAim     = false,
+    AimRadius     = 120,
+    AimSmooth     = 0.3,
+    SilentLaser   = false,
+    AimTarget     = "Killer",
+    AutoGen       = false,
+
+    -- Killer
+    KillerSilentAim  = false,
+    SpearGravity     = false,
+    SnapLine         = false,
+    AimPredict       = false,
+    AntiStun         = false,
+    AntiFlashlight   = false,
+
+    -- Visual
+    ESPSurvivor  = false,
+    ESPKiller    = false,
+    ESPGenerator = false,
+    ESPHook      = false,
+    ESPPallet    = false,
+    KillerNotif  = false,
+
+    -- Settings
+    CamFOV       = 70,
+    Crosshair    = "Dot",
+    NoTexture    = false,
+    FullBright   = false,
+    NoFog        = false,
+
+    -- Internal
+    FlyConn      = nil,
+    NoClipConn   = nil,
+    GenConn      = nil,
+    ParryConn    = nil,
+    AimConn      = nil,
+    ESPConns     = {},
+    NotifConns   = {},
+    CrosshairGui = nil,
+    OrigTextures = {},
+    OrigFogEnd   = Workspace:FindFirstChild("Terrain") and 1000 or 1000,
+    OrigBrightness = game:GetService("Lighting").Brightness,
+    OrigAmbient    = game:GetService("Lighting").Ambient,
+    OrigFogColor   = game:GetService("Lighting").FogColor,
+    OrigFogEnd2    = game:GetService("Lighting").FogEnd,
+    OrigFogStart   = game:GetService("Lighting").FogStart,
+    CurrentConfig  = "",
+}
+
+local Lighting = game:GetService("Lighting")
+
+-- ════════════════════════════════════════════════════════════════
+--  HELPERS
+-- ════════════════════════════════════════════════════════════════
+local function safe(fn, ...) local ok,e=pcall(fn,...) if not ok then warn("[RYZ] "..tostring(e)) end return ok end
+
+local function getChar()
+    return LP.Character
+end
+local function getHRP()
+    local c = getChar() return c and c:FindFirstChild("HumanoidRootPart")
+end
+local function getHum()
+    local c = getChar() return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function getAllPlayers()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP then table.insert(list, p) end
+    end
+    return list
+end
+
+local function getPlayerNames()
+    local names = {}
+    for _, p in ipairs(getAllPlayers()) do table.insert(names, p.Name) end
+    return #names > 0 and names or {"(No Players)"}
+end
+
+-- find model by tag/name in workspace
+local function findByName(name)
+    return Workspace:FindFirstChild(name, true)
+end
+
+local function worldToViewport(pos)
+    local vp, inView = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(vp.X, vp.Y), inView, vp.Z
+end
+
+local function getScreenCenter()
+    return Camera.ViewportSize / 2
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  ANTI AFK
+-- ════════════════════════════════════════════════════════════════
+safe(function()
+    LP.Idled:Connect(function()
+        if not S.AntiAFK then return end
+        VirtualUser:Button2Down(Vector2.new(0,0), Camera.CFrame)
+        task.wait(0.5)
+        VirtualUser:Button2Up(Vector2.new(0,0), Camera.CFrame)
+    end)
+end)
+
+-- ════════════════════════════════════════════════════════════════
+--  NO CLIP
+-- ════════════════════════════════════════════════════════════════
+local function setNoClip(v)
+    S.NoClip = v
+    if S.NoClipConn then S.NoClipConn:Disconnect() S.NoClipConn = nil end
+    if v then
+        S.NoClipConn = RunService.Stepped:Connect(function()
+            local c = getChar() if not c then return end
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+        end)
+    else
+        local c = getChar()
+        if c then
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = true end
+            end
+        end
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  FLY
+-- ════════════════════════════════════════════════════════════════
+local function setFly(v)
+    S.Fly = v
+    if S.FlyConn then S.FlyConn:Disconnect() S.FlyConn = nil end
+
+    local hum = getHum()
+    local hrp = getHRP()
+    if not hum or not hrp then return end
+
+    if v then
+        hum.PlatformStand = true
+        local bg = Instance.new("BodyGyro")
+        bg.MaxTorque = Vector3.new(1e9,1e9,1e9) bg.P = 1e4 bg.D = 1e3 bg.Parent = hrp
+
+        local bv = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(1e9,1e9,1e9) bv.Velocity = Vector3.zero bv.Parent = hrp
+
+        S.FlyConn = RunService.Heartbeat:Connect(function()
+            local hrp2 = getHRP() if not hrp2 then return end
+            if not bg.Parent then return end
+            local spd = S.FlySpeed
+            local dir = Vector3.zero
+            local cf  = Camera.CFrame
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cf.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cf.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cf.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cf.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
+            bv.Velocity = dir.Magnitude > 0 and dir.Unit * spd or Vector3.zero
+            bg.CFrame = Camera.CFrame
+        end)
+    else
+        -- cleanup
+        if hrp then
+            for _, c in ipairs(hrp:GetChildren()) do
+                if c:IsA("BodyGyro") or c:IsA("BodyVelocity") then c:Destroy() end
+            end
+        end
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SPEED HACK
+-- ════════════════════════════════════════════════════════════════
+local function applySpeed()
+    local h = getHum() if not h then return end
+    if S.SpeedHack then h.WalkSpeed = S.SpeedValue
+    else h.WalkSpeed = 16 end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  INFINITY JUMP
+-- ════════════════════════════════════════════════════════════════
+UserInputService.JumpRequest:Connect(function()
+    if not S.InfJump then return end
+    local h = getHum() if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+end)
+
+-- ════════════════════════════════════════════════════════════════
+--  TELEPORT TO PLAYER
+-- ════════════════════════════════════════════════════════════════
+local function teleportToPlayer(name)
+    local target = Players:FindFirstChild(name)
+    if not target or not target.Character then
+        warn("[RYZ] Player not found: "..tostring(name)) return
+    end
+    local tHRP = target.Character:FindFirstChild("HumanoidRootPart")
+    local myHRP = getHRP()
+    if tHRP and myHRP then
+        myHRP.CFrame = tHRP.CFrame + tHRP.CFrame.LookVector * 4
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SILENT AIM (Survivor / Killer)
+-- ════════════════════════════════════════════════════════════════
+local function getBestTarget(targetType)
+    local best, bestDist = nil, S.AimRadius
+    local center = getScreenCenter()
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local char = p.Character
+        if not char then continue end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hrp or not hum or hum.Health <= 0 then continue end
+
+        -- filter by target type (check naming or group)
+        local isKiller = char:FindFirstChild("KillerConfig") ~= nil
+            or char:FindFirstChild("KillerMorph") ~= nil
+            or char.Name:lower():find("killer")
+        local isSurvivor = not isKiller
+
+        local ok = false
+        if targetType == "Killer" and isKiller then ok = true
+        elseif targetType == "Survivor" and isSurvivor then ok = true
+        elseif targetType == "All" then ok = true end
+
+        if not ok then continue end
+
+        local vp, inView = worldToViewport(hrp.Position)
+        if not inView then continue end
+        local dist = (vp - center).Magnitude
+        if dist < bestDist then
+            bestDist = dist
+            best = hrp
+        end
+    end
+    return best
+end
+
+-- Override GetMouseTarget to redirect mouse ray
+local oldGetMouseHit
+local aimActive = false
+
+local function startSilentAim()
+    if S.AimConn then S.AimConn:Disconnect() S.AimConn = nil end
+    S.AimConn = RunService.RenderStepped:Connect(function()
+        if not S.SilentAim and not S.KillerSilentAim then return end
+        local targetType = S.KillerSilentAim and "Survivor" or S.AimTarget
+        local target = getBestTarget(targetType)
+        if not target then return end
+
+        -- Move mouse ray toward target with smoothing
+        local vpPos, inView = worldToViewport(target.Position)
+        if not inView then return end
+        local center = getScreenCenter()
+        local smooth = math.clamp(S.AimSmooth, 0.01, 1)
+
+        -- Apply silent aim by directly snapping camera ray (client-side trick)
+        -- We store the override target for use in fire functions
+        S._aimOverrideTarget = target
+    end)
+end
+startSilentAim()
+
+-- ════════════════════════════════════════════════════════════════
+--  AUTO GENERATOR
+-- ════════════════════════════════════════════════════════════════
+local function findNearestGen()
+    local hrp = getHRP() if not hrp then return nil end
+    local best, bestD = nil, math.huge
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Generator" or obj.Name == "Gen" or obj.Name == "GeneratorPoint" then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local pos = obj:IsA("Model") and obj:GetModelCFrame().Position
+                    or obj.Position
+                local d = (pos - hrp.Position).Magnitude
+                if d < bestD then bestD = d best = obj end
+            end
+        end
+    end
+    return best
+end
+
+local function fireRepairEvent()
+    safe(function()
+        local rs = ReplicatedStorage
+        local repairEvent = rs:FindFirstChild("RepairEvent", true)
+            or rs:FindFirstChild("GeneratorRepair", true)
+            or rs:FindFirstChild("Repair", true)
+        if repairEvent then
+            if repairEvent:IsA("RemoteEvent") then repairEvent:FireServer()
+            elseif repairEvent:IsA("BindableEvent") then repairEvent:Fire() end
+        end
+        -- Also try skillcheck auto-success
+        local skillOk = rs:FindFirstChild("SkillCheckResultEvent", true)
+            or rs:FindFirstChild("SkillcheckValidated", true)
+        if skillOk then
+            if skillOk:IsA("RemoteEvent") then skillOk:FireServer(true)
+            elseif skillOk:IsA("BindableEvent") then skillOk:Fire(true) end
+        end
+    end)
+end
+
+local function setAutoGen(v)
+    S.AutoGen = v
+    if S.GenConn then S.GenConn:Disconnect() S.GenConn = nil end
+    if not v then return end
+    S.GenConn = RunService.Heartbeat:Connect(function()
+        if not S.AutoGen then return end
+        local gen = findNearestGen()
+        if not gen then return end
+        local hrp = getHRP() if not hrp then return end
+        local pos = gen:IsA("Model") and gen:GetModelCFrame().Position or gen.Position
+        local dist = (pos - hrp.Position).Magnitude
+        if dist < 6 then
+            fireRepairEvent()
+        end
+    end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  AUTO PARRY
+-- ════════════════════════════════════════════════════════════════
+local function doParry()
+    safe(function()
+        local rs = ReplicatedStorage
+        local parryEv = rs:FindFirstChild("ParryEvent", true)
+            or rs:FindFirstChild("AttackEvent", true)
+            or rs:FindFirstChild("BasicAttack", true)
+        if parryEv then
+            if parryEv:IsA("RemoteEvent") then parryEv:FireServer("Parry")
+            elseif parryEv:IsA("BindableEvent") then parryEv:Fire("Parry") end
+        end
+    end)
+end
+
+local function findKillerHRP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local char = p.Character if not char then continue end
+        if char:FindFirstChild("KillerConfig") or char:FindFirstChild("KillerMorph") then
+            return char:FindFirstChild("HumanoidRootPart"), p
+        end
+    end
+    -- fallback: look for KillerSpawn model
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "KillerSpawn" and obj:IsA("BasePart") then
+            return obj
+        end
+    end
+    return nil
+end
+
+local function killerFacingSurvivor(killerHRP)
+    local myHRP = getHRP() if not myHRP or not killerHRP then return true end
+    local toSurvivor = (myHRP.Position - killerHRP.Position).Unit
+    local killerLook = killerHRP.CFrame.LookVector
+    local dot = killerLook:Dot(toSurvivor)
+    local angle = math.deg(math.acos(math.clamp(dot, -1, 1)))
+    return angle <= (S.FaceKillerAngle / 2)
+end
+
+local function setAutoParry(v)
+    S.AutoParry = v
+    if S.ParryConn then S.ParryConn:Disconnect() S.ParryConn = nil end
+    if not v then return end
+    S.ParryConn = RunService.Heartbeat:Connect(function()
+        if not S.AutoParry then return end
+        local myHRP = getHRP() if not myHRP then return end
+        local killerHRP = findKillerHRP()
+        if not killerHRP then return end
+        local dist = (killerHRP.Position - myHRP.Position).Magnitude
+        if dist <= S.ParryRange then
+            if not killerFacingSurvivor(killerHRP) then return end
+            task.wait(S.ParryDelay)
+            doParry()
+        end
+    end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SILENT LASER (Survivor)
+-- ════════════════════════════════════════════════════════════════
+local function fireSilentLaser(targetPart)
+    if not targetPart then return end
+    safe(function()
+        local rs = ReplicatedStorage
+        local laserEv = rs:FindFirstChild("ClipEvent", true)
+            or rs:FindFirstChild("GrabHitResult", true)
+            or rs:FindFirstChild("HitBox", true)
+        if laserEv then
+            if laserEv:IsA("RemoteEvent") then laserEv:FireServer(targetPart)
+            elseif laserEv:IsA("BindableEvent") then laserEv:Fire(targetPart) end
+        end
+    end)
+end
+
+-- Hook Mouse1Click for silent laser
+UserInputService.InputBegan:Connect(function(inp, gp)
+    if gp then return end
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        if S.SilentLaser and S._aimOverrideTarget then
+            fireSilentLaser(S._aimOverrideTarget)
+        end
+    end
+end)
+
+-- ════════════════════════════════════════════════════════════════
+--  KILLER: ANTI STUN
+-- ════════════════════════════════════════════════════════════════
+local function setAntiStun(v)
+    S.AntiStun = v
+    if v then
+        RunService.Stepped:Connect(function()
+            if not S.AntiStun then return end
+            safe(function()
+                local rs = ReplicatedStorage
+                local stunEv = rs:FindFirstChild("Stun", true) or rs:FindFirstChild("StunOver", true)
+                -- Fire stun-over to cancel stun state
+                if stunEv and stunEv.Name == "StunOver" then
+                    if stunEv:IsA("RemoteEvent") then stunEv:FireServer()
+                    elseif stunEv:IsA("BindableEvent") then stunEv:Fire() end
+                end
+            end)
+        end)
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  KILLER: ANTI FLASHLIGHT
+-- ════════════════════════════════════════════════════════════════
+local function setAntiFlashlight(v)
+    S.AntiFlashlight = v
+    safe(function()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p == LP then continue end
+            local char = p.Character if not char then continue end
+            for _, obj in ipairs(char:GetDescendants()) do
+                if obj:IsA("SpotLight") or obj.Name:lower():find("flashlight") then
+                    if v then
+                        obj.Enabled = false
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  KILLER: SPEAR GRAVITY (zero-gravity spear)
+-- ════════════════════════════════════════════════════════════════
+local function setSpearGravity(v)
+    S.SpearGravity = v
+    RunService.Stepped:Connect(function()
+        if not S.SpearGravity then return end
+        safe(function()
+            local char = getChar() if not char then return end
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj.Name:lower():find("spear") and obj:IsA("BasePart") then
+                    if obj.AssemblyLinearVelocity.Magnitude > 1 then
+                        obj.AssemblyLinearVelocity = Vector3.new(
+                            obj.AssemblyLinearVelocity.X,
+                            0,
+                            obj.AssemblyLinearVelocity.Z
+                        )
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  KILLER: SNAP LINE (draw beam to target)
+-- ════════════════════════════════════════════════════════════════
+local snapLineGui = nil
+local function buildSnapLine()
+    local pgui = LP:FindFirstChild("PlayerGui")
+    if not pgui then return end
+    local old = pgui:FindFirstChild("RYZ_SnapLine")
+    if old then old:Destroy() end
+    if not S.SnapLine then return end
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "RYZ_SnapLine" sg.ResetOnSpawn=false sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder=9998 sg.Parent=pgui
+    snapLineGui = sg
+
+    local frame = Instance.new("Frame")
+    frame.Size=UDim2.new(1,0,1,0) frame.BackgroundTransparency=1 frame.Parent=sg
+
+    RunService.RenderStepped:Connect(function()
+        if not S.SnapLine then frame:ClearAllChildren() return end
+        frame:ClearAllChildren()
+        local target = getBestTarget("Survivor")
+        if not target then return end
+        local myHRP = getHRP() if not myHRP then return end
+
+        local vpA, inA = worldToViewport(myHRP.Position)
+        local vpB, inB = worldToViewport(target.Position)
+        if not inA or not inB then return end
+
+        local dist = (vpB - vpA).Magnitude
+        local angle = math.atan2(vpB.Y - vpA.Y, vpB.X - vpA.X)
+        local mid = (vpA + vpB) / 2
+
+        local line = Instance.new("Frame")
+        line.Size = UDim2.fromOffset(dist, 2)
+        line.Position = UDim2.fromOffset(mid.X - dist/2, mid.Y - 1)
+        line.AnchorPoint = Vector2.new(0.5, 0.5)
+        line.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+        line.BackgroundTransparency = 0.3
+        line.BorderSizePixel = 0
+        line.Rotation = math.deg(angle)
+        line.ZIndex = 5
+        local uc = Instance.new("UICorner") uc.CornerRadius=UDim.new(1,0) uc.Parent=line
+        line.Parent = frame
+    end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  KILLER: AIM PREDICT (lead target)
+-- ════════════════════════════════════════════════════════════════
+local function getPredictedPos(hrp, projectileSpeed)
+    local vel = hrp.AssemblyLinearVelocity
+    local myHRP = getHRP() if not myHRP then return hrp.Position end
+    local dist = (hrp.Position - myHRP.Position).Magnitude
+    local travelTime = dist / (projectileSpeed or 80)
+    return hrp.Position + vel * travelTime
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  ESP SYSTEM (Highlight-based)
+-- ════════════════════════════════════════════════════════════════
+local ESPData = {}
+
+local function removeESP(model)
+    if ESPData[model] then
+        safe(function()
+            if ESPData[model].highlight and ESPData[model].highlight.Parent then
+                ESPData[model].highlight:Destroy()
+            end
+            if ESPData[model].billGui and ESPData[model].billboard.Parent then
+                ESPData[model].billboard:Destroy()
+            end
+        end)
+        ESPData[model] = nil
+    end
+end
+
+local function clearAllESP()
+    for model, _ in pairs(ESPData) do removeESP(model) end
+    ESPData = {}
+end
+
+local function makeHighlight(model, fillColor, outlineColor, fillTrans, outlineTrans)
+    if ESPData[model] and ESPData[model].highlight then
+        safe(function() ESPData[model].highlight:Destroy() end)
+    end
+    local hl = Instance.new("SelectionBox")
+    hl.Adornee = model
+    hl.Color3 = outlineColor or Color3.fromRGB(255,255,255)
+    hl.SurfaceColor3 = fillColor or Color3.fromRGB(255,255,255)
+    hl.SurfaceTransparency = fillTrans or 0.7
+    hl.LineThickness = 0.04
+    hl.Parent = Workspace
+    return hl
+end
+
+local function makeBillboard(part, title, color)
+    local bg = Instance.new("BillboardGui")
+    bg.Adornee = part
+    bg.AlwaysOnTop = true
+    bg.Size = UDim2.fromOffset(200, 60)
+    bg.StudsOffsetWorldSpace = Vector3.new(0, 3.5, 0)
+    bg.Parent = part
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = title
+    lbl.TextColor3 = color or Color3.fromRGB(255, 255, 255)
+    lbl.TextSize = 13
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextStrokeTransparency = 0
+    lbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    lbl.Parent = bg
+
+    return bg, lbl
+end
+
+local function updateESPLabel(model, lbl, extraInfo)
+    if not lbl or not lbl.Parent then return end
+    local hrp = model:FindFirstChild("HumanoidRootPart")
+    local myHRP = getHRP()
+    local dist = (hrp and myHRP) and math.floor((hrp.Position - myHRP.Position).Magnitude) or "?"
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    local hp = hum and math.floor(hum.Health) or "?"
+    lbl.Text = string.format("[%s]\nHP:%s  DIST:%sm%s", model.Name, hp, dist, extraInfo or "")
+end
+
+-- ── SURVIVOR ESP ─────────────────────────────────────────────
+local function refreshSurvivorESP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local char = p.Character
+        if not char then continue end
+        local isKiller = char:FindFirstChild("KillerConfig") ~= nil
+
+        if not isKiller and S.ESPSurvivor then
+            if not ESPData[char] then
+                local hl = makeHighlight(char, Color3.fromRGB(0,200,255), Color3.fromRGB(0,200,255), 0.75, 0)
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local bg, lbl = makeBillboard(hrp or char.PrimaryPart or char:FindFirstChild("Head") or char, "", Color3.fromRGB(0,200,255))
+                ESPData[char] = {highlight=hl, billboard=bg, label=lbl, type="Survivor"}
+            end
+        elseif not isKiller and not S.ESPSurvivor then
+            if ESPData[char] and ESPData[char].type == "Survivor" then removeESP(char) end
+        end
+    end
+end
+
+-- ── KILLER ESP ───────────────────────────────────────────────
+local function getKillerItem(char)
+    for _, c in ipairs(char:GetChildren()) do
+        if c:IsA("Tool") then return c.Name end
+    end
+    return "None"
+end
+
+local function refreshKillerESP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local char = p.Character
+        if not char then continue end
+        local isKiller = char:FindFirstChild("KillerConfig") ~= nil
+            or char:FindFirstChild("KillerMorph") ~= nil
+
+        if isKiller and S.ESPKiller then
+            if not ESPData[char] then
+                local hl = makeHighlight(char, Color3.fromRGB(255,50,50), Color3.fromRGB(255,50,50), 0.65, 0)
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local bg, lbl = makeBillboard(hrp or char:FindFirstChild("Head") or char, "", Color3.fromRGB(255,80,80))
+                ESPData[char] = {highlight=hl, billboard=bg, label=lbl, type="Killer"}
+            end
+        elseif isKiller and not S.ESPKiller then
+            if ESPData[char] and ESPData[char].type == "Killer" then removeESP(char) end
+        end
+    end
+end
+
+-- ── GENERATOR ESP ────────────────────────────────────────────
+local function refreshGenESP()
+    if not S.ESPGenerator then
+        for model, data in pairs(ESPData) do
+            if data.type == "Generator" then removeESP(model) end
+        end
+        return
+    end
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if (obj.Name == "Generator" or obj.Name == "Gen") and obj:IsA("Model") then
+            if not ESPData[obj] then
+                local hl = makeHighlight(obj, Color3.fromRGB(255,200,0), Color3.fromRGB(255,200,0), 0.7, 0)
+                local pp = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+                local bg, lbl = makeBillboard(pp, "", Color3.fromRGB(255,200,0))
+                ESPData[obj] = {highlight=hl, billboard=bg, label=lbl, type="Generator"}
+            end
+        end
+    end
+end
+
+-- ── HOOK ESP ─────────────────────────────────────────────────
+local function refreshHookESP()
+    if not S.ESPHook then
+        for model, data in pairs(ESPData) do
+            if data.type == "Hook" then removeESP(model) end
+        end
+        return
+    end
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Hook" or obj.Name == "HookPoint" then
+            local target = obj:IsA("BasePart") and obj or (obj:IsA("Model") and obj:FindFirstChildOfClass("BasePart"))
+            if target and not ESPData[obj] then
+                local hl = Instance.new("SelectionBox")
+                hl.Adornee = target hl.Color3=Color3.fromRGB(180,90,255)
+                hl.SurfaceColor3=Color3.fromRGB(180,90,255) hl.SurfaceTransparency=0.75
+                hl.LineThickness=0.04 hl.Parent=Workspace
+                local bg, lbl = makeBillboard(target, "🪝 HOOK", Color3.fromRGB(200,120,255))
+                ESPData[obj] = {highlight=hl, billboard=bg, label=lbl, type="Hook"}
+            end
+        end
+    end
+end
+
+-- ── PALLET ESP ───────────────────────────────────────────────
+local function refreshPalletESP()
+    if not S.ESPPallet then
+        for model, data in pairs(ESPData) do
+            if data.type == "Pallet" then removeESP(model) end
+        end
+        return
+    end
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "Pallet" or obj.Name == "PalletPoint" or obj.Name == "PrimaryPartPallet" then
+            local target = obj:IsA("BasePart") and obj or (obj:IsA("Model") and obj:FindFirstChildOfClass("BasePart"))
+            if target and not ESPData[obj] then
+                local hl = Instance.new("SelectionBox")
+                hl.Adornee=target hl.Color3=Color3.fromRGB(0,220,120)
+                hl.SurfaceColor3=Color3.fromRGB(0,220,120) hl.SurfaceTransparency=0.75
+                hl.LineThickness=0.04 hl.Parent=Workspace
+                local bg, lbl = makeBillboard(target, "🪵 PALLET", Color3.fromRGB(50,230,130))
+                ESPData[obj] = {highlight=hl, billboard=bg, label=lbl, type="Pallet"}
+            end
+        end
+    end
+end
+
+-- ── KILLER NOTIF (! above survivor near killer) ──────────────
+local notifBills = {}
+local function refreshKillerNotif()
+    -- Clear old
+    for char, bg in pairs(notifBills) do
+        if bg and bg.Parent then bg:Destroy() end
+    end
+    notifBills = {}
+    if not S.KillerNotif then return end
+end
+
+local function updateKillerNotif()
+    if not S.KillerNotif then return end
+    local killerHRP = findKillerHRP()
+    if not killerHRP then return end
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LP then continue end
+        local char = p.Character if not char then continue end
+        local hrp = char:FindFirstChild("HumanoidRootPart") if not hrp then continue end
+        local isKiller = char:FindFirstChild("KillerConfig") ~= nil
+        if isKiller then continue end
+
+        local dist = (hrp.Position - killerHRP.Position).Magnitude
+        local head = char:FindFirstChild("Head") or hrp
+
+        if dist < 25 then
+            if not notifBills[char] then
+                local bg = Instance.new("BillboardGui")
+                bg.Adornee=head bg.AlwaysOnTop=true
+                bg.Size=UDim2.fromOffset(50,50)
+                bg.StudsOffsetWorldSpace=Vector3.new(0,5,0)
+                bg.Parent=head
+                local lbl=Instance.new("TextLabel")
+                lbl.Size=UDim2.new(1,0,1,0)
+                lbl.BackgroundTransparency=1 lbl.Text="⚠"
+                lbl.TextColor3=Color3.fromRGB(255,80,0)
+                lbl.TextSize=30 lbl.Font=Enum.Font.GothamBold
+                lbl.TextStrokeTransparency=0 lbl.Parent=bg
+                notifBills[char] = bg
+            end
+        else
+            if notifBills[char] then
+                safe(function() notifBills[char]:Destroy() end)
+                notifBills[char] = nil
+            end
+        end
+    end
+end
+
+-- ── MASTER ESP UPDATE LOOP ───────────────────────────────────
+RunService.Heartbeat:Connect(function()
+    refreshSurvivorESP()
+    refreshKillerESP()
+    refreshGenESP()
+    refreshHookESP()
+    refreshPalletESP()
+    updateKillerNotif()
+
+    -- Update labels
+    for model, data in pairs(ESPData) do
+        if not model or not model.Parent then
+            removeESP(model) continue
+        end
+        if data.label then
+            if data.type == "Survivor" or data.type == "Killer" then
+                local extra = data.type == "Killer"
+                    and ("\nItem: "..getKillerItem(model)) or ""
+                updateESPLabel(model, data.label, extra)
+            elseif data.type == "Generator" then
+                local hrp2 = getHRP()
+                local pp = model.PrimaryPart or model:FindFirstChildOfClass("BasePart")
+                local d = (pp and hrp2) and math.floor((pp.Position-hrp2.Position).Magnitude) or "?"
+                -- Try read repair % from value
+                local pct = 0
+                safe(function()
+                    local v = model:FindFirstChild("Progress") or model:FindFirstChild("Repair")
+                    if v and v:IsA("NumberValue") then pct=math.floor(v.Value*100) end
+                end)
+                data.label.Text = string.format("⚙ GEN %d%%\nDIST: %sm", pct, d)
+            elseif data.type == "Hook" then
+                local hrp2 = getHRP()
+                local hl = ESPData[model]
+                if hl and hl.highlight and hl.highlight.Adornee then
+                    local pos = hl.highlight.Adornee.Position
+                    local d = hrp2 and math.floor((pos-hrp2.Position).Magnitude) or "?"
+                    data.label.Text = "🪝 HOOK\nDIST: "..d.."m"
+                end
+            elseif data.type == "Pallet" then
+                local hrp2 = getHRP()
+                local hl = ESPData[model]
+                if hl and hl.highlight and hl.highlight.Adornee then
+                    local pos = hl.highlight.Adornee.Position
+                    local d = hrp2 and math.floor((pos-hrp2.Position).Magnitude) or "?"
+                    data.label.Text = "🪵 PALLET\nDIST: "..d.."m"
+                end
+            end
+        end
+    end
+end)
+
+-- ════════════════════════════════════════════════════════════════
+--  SETTINGS: FOV
+-- ════════════════════════════════════════════════════════════════
+local function setFOV(v)
+    S.CamFOV = v
+    Camera.FieldOfView = v
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SETTINGS: CROSSHAIR
+-- ════════════════════════════════════════════════════════════════
+local CROSSHAIRS = {
+    ["Dot"]     = { shape="dot",   size=6,  color=Color3.fromRGB(255,255,255) },
+    ["Cross"]   = { shape="cross", size=16, color=Color3.fromRGB(255,255,255) },
+    ["Circle"]  = { shape="circle",size=20, color=Color3.fromRGB(255,255,255) },
+    ["T-Shape"] = { shape="tshape",size=16, color=Color3.fromRGB(255,80,80)   },
+    ["Plus"]    = { shape="plus",  size=16, color=Color3.fromRGB(0,220,100)   },
+    ["None"]    = { shape="none",  size=0,  color=Color3.fromRGB(0,0,0)       },
+}
+
+local function buildCrosshair(style)
+    local pgui = LP:FindFirstChild("PlayerGui") if not pgui then return end
+    local old = pgui:FindFirstChild("RYZ_Crosshair") if old then old:Destroy() end
+    S.CrosshairGui = nil
+    if not style or style == "None" then return end
+
+    local cfg = CROSSHAIRS[style]
+    if not cfg then return end
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name="RYZ_Crosshair" sg.ResetOnSpawn=false sg.DisplayOrder=9990 sg.IgnoreGuiInset=true sg.Parent=pgui
+    S.CrosshairGui = sg
+
+    local vp = Camera.ViewportSize
+    local cx, cy = vp.X/2, vp.Y/2
+    local s = cfg.size
+    local col = cfg.color
+
+    local function rect(x,y,w,h)
+        local f=Instance.new("Frame")
+        f.Position=UDim2.fromOffset(x,y) f.Size=UDim2.fromOffset(w,h)
+        f.BackgroundColor3=col f.BorderSizePixel=0
+        f.ZIndex=10 f.Parent=sg
+        return f
+    end
+
+    if cfg.shape == "dot" then
+        local r = rect(cx-s/2, cy-s/2, s, s)
+        local uc=Instance.new("UICorner") uc.CornerRadius=UDim.new(1,0) uc.Parent=r
+    elseif cfg.shape == "cross" or cfg.shape == "plus" then
+        rect(cx-s/2, cy-1, s, 2)   -- horizontal
+        rect(cx-1, cy-s/2, 2, s)   -- vertical
+    elseif cfg.shape == "circle" then
+        local f=Instance.new("Frame")
+        f.Position=UDim2.fromOffset(cx-s/2, cy-s/2) f.Size=UDim2.fromOffset(s,s)
+        f.BackgroundTransparency=1 f.BorderSizePixel=0 f.ZIndex=10 f.Parent=sg
+        local ui=Instance.new("UICorner") ui.CornerRadius=UDim.new(1,0) ui.Parent=f
+        local st=Instance.new("UIStroke") st.Color=col st.Thickness=1.5 st.Parent=f
+    elseif cfg.shape == "tshape" then
+        rect(cx-s/2, cy, s, 2)      -- horizontal bottom
+        rect(cx-1,   cy-s/2, 2, s/2) -- vertical top only
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SETTINGS: NO TEXTURE
+-- ════════════════════════════════════════════════════════════════
+local function setNoTexture(v)
+    S.NoTexture = v
+    safe(function()
+        if v then
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if obj:IsA("Texture") or obj:IsA("Decal") then
+                    if not S.OrigTextures[obj] then
+                        S.OrigTextures[obj] = obj.Transparency
+                    end
+                    obj.Transparency = 1
+                end
+            end
+        else
+            for obj, orig in pairs(S.OrigTextures) do
+                safe(function() if obj and obj.Parent then obj.Transparency = orig end end)
+            end
+            S.OrigTextures = {}
+        end
+    end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SETTINGS: FULL BRIGHT
+-- ════════════════════════════════════════════════════════════════
+local function setFullBright(v)
+    S.FullBright = v
+    if v then
+        Lighting.Brightness   = 8
+        Lighting.Ambient      = Color3.fromRGB(178,178,178)
+        Lighting.OutdoorAmbient = Color3.fromRGB(178,178,178)
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd       = 100000
+    else
+        Lighting.Brightness   = S.OrigBrightness
+        Lighting.Ambient      = S.OrigAmbient
+        Lighting.GlobalShadows = true
+        Lighting.FogEnd       = S.OrigFogEnd2
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  SETTINGS: NO FOG
+-- ════════════════════════════════════════════════════════════════
+local function setNoFog(v)
+    S.NoFog = v
+    if v then
+        Lighting.FogEnd   = 100000
+        Lighting.FogStart = 99999
+    else
+        Lighting.FogEnd   = S.OrigFogEnd2
+        Lighting.FogStart = S.OrigFogStart
+    end
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  CONFIG SYSTEM
+-- ════════════════════════════════════════════════════════════════
+local CONFIG_FOLDER = "RYZ_VD_Configs"
+local function ensureConfigFolder()
+    safe(function() if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end end)
+end
+local function getConfigList()
+    local list = {}
+    safe(function()
+        ensureConfigFolder()
+        for _, f in ipairs(listfiles(CONFIG_FOLDER)) do
+            local n = f:match("([^/\\]+)$") or f
+            if n:sub(-5)==".json" then table.insert(list, n:sub(1,-6)) end
+        end
+    end)
+    return #list>0 and list or {"(No Configs)"}
+end
+
+local function serializeConfig()
+    return HttpService:JSONEncode({
+        NoClip=S.NoClip, Fly=S.Fly, FlySpeed=S.FlySpeed,
+        SpeedHack=S.SpeedHack, SpeedValue=S.SpeedValue,
+        InfJump=S.InfJump, AntiAFK=S.AntiAFK,
+        AutoParry=S.AutoParry, ParryRange=S.ParryRange,
+        FaceKillerAngle=S.FaceKillerAngle, ParryDelay=S.ParryDelay,
+        SilentAim=S.SilentAim, AimRadius=S.AimRadius,
+        AimSmooth=S.AimSmooth, SilentLaser=S.SilentLaser,
+        AimTarget=S.AimTarget, AutoGen=S.AutoGen,
+        KillerSilentAim=S.KillerSilentAim, SpearGravity=S.SpearGravity,
+        SnapLine=S.SnapLine, AimPredict=S.AimPredict,
+        AntiStun=S.AntiStun, AntiFlashlight=S.AntiFlashlight,
+        ESPSurvivor=S.ESPSurvivor, ESPKiller=S.ESPKiller,
+        ESPGenerator=S.ESPGenerator, ESPHook=S.ESPHook,
+        ESPPallet=S.ESPPallet, KillerNotif=S.KillerNotif,
+        CamFOV=S.CamFOV, Crosshair=S.Crosshair,
+        NoTexture=S.NoTexture, FullBright=S.FullBright, NoFog=S.NoFog,
+    })
+end
+
+local function saveConfig(name)
+    if not name or name=="" then return false end
+    ensureConfigFolder()
+    safe(function()
+        writefile(CONFIG_FOLDER.."/"..name..".json", serializeConfig())
+    end)
+    return true
+end
+
+local function loadConfig(name)
+    local raw
+    safe(function() raw = readfile(CONFIG_FOLDER.."/"..name..".json") end)
+    if not raw then return false end
+    local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
+    if not ok or type(data) ~= "table" then return false end
+
+    for k,v in pairs(data) do
+        if S[k] ~= nil then S[k] = v end
+    end
+
+    -- Re-apply all settings
+    setNoClip(S.NoClip)
+    setFly(false) if S.Fly then setFly(true) end
+    applySpeed()
+    setAutoGen(S.AutoGen)
+    setAutoParry(S.AutoParry)
+    buildSnapLine()
+    setFOV(S.CamFOV)
+    buildCrosshair(S.Crosshair)
+    setNoTexture(S.NoTexture)
+    setFullBright(S.FullBright)
+    setNoFog(S.NoFog)
+    return true
+end
+
+local function deleteConfig(name)
+    safe(function() delfile(CONFIG_FOLDER.."/"..name..".json") end)
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  RESPAWN HANDLER
+-- ════════════════════════════════════════════════════════════════
+LP.CharacterAdded:Connect(function()
+    task.wait(1)
+    if S.Fly     then setFly(true) end
+    if S.NoClip  then setNoClip(true) end
+    if S.SpeedHack then applySpeed() end
+    if S.AutoGen  then setAutoGen(true) end
+    if S.AutoParry then setAutoParry(true) end
+    Camera.FieldOfView = S.CamFOV
+    buildCrosshair(S.Crosshair)
+end)
+
+-- ════════════════════════════════════════════════════════════════
+--  WINDUI LOAD
+-- ════════════════════════════════════════════════════════════════
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+-- ── THEME ─────────────────────────────────────────────────────
+WindUI:AddTheme({
+    Name = "MacOS Dark",
+    Accent                    = Color3.fromHex("#18181b"),
+    Background                = Color3.fromHex("#101010"),
+    BackgroundTransparency    = 0.05,
+    Outline                   = Color3.fromHex("#2a2a2e"),
+    Text                      = Color3.fromHex("#ffffff"),
+    Placeholder               = Color3.fromHex("#7a7a7a"),
+    Button                    = Color3.fromHex("#2c2c30"),
+    Icon                      = Color3.fromHex("#a1a1aa"),
+    Hover                     = Color3.fromHex("#ffffff"),
+    WindowBackground          = Color3.fromHex("#101010"),
+    WindowShadow              = Color3.fromHex("#000000"),
+    WindowTopbarTitle         = Color3.fromHex("#ffffff"),
+    WindowTopbarAuthor        = Color3.fromHex("#a1a1aa"),
+    WindowTopbarIcon          = Color3.fromHex("#ffffff"),
+    WindowTopbarButtonIcon    = Color3.fromHex("#a1a1aa"),
+    TabBackground             = Color3.fromHex("#18181b"),
+    TabTitle                  = Color3.fromHex("#ffffff"),
+    TabIcon                   = Color3.fromHex("#a1a1aa"),
+    ElementBackground         = Color3.fromHex("#1c1c1f"),
+    ElementTitle              = Color3.fromHex("#ffffff"),
+    ElementDesc               = Color3.fromHex("#a1a1aa"),
+    ElementIcon               = Color3.fromHex("#a1a1aa"),
+    PopupBackground           = Color3.fromHex("#101010"),
+    PopupBackgroundTransparency = 0,
+    PopupTitle                = Color3.fromHex("#ffffff"),
+    PopupContent              = Color3.fromHex("#a1a1aa"),
+    PopupIcon                 = Color3.fromHex("#a1a1aa"),
+    Toggle                    = Color3.fromHex("#2c2c30"),
+    ToggleBar                 = Color3.fromHex("#ffffff"),
+    Checkbox                  = Color3.fromHex("#2c2c30"),
+    CheckboxIcon              = Color3.fromHex("#ffffff"),
+    Slider                    = Color3.fromHex("#2c2c30"),
+    SliderThumb               = Color3.fromHex("#ffffff"),
+})
+WindUI:SetTheme("MacOS Dark")
+
+-- ── WINDOW ────────────────────────────────────────────────────
+local Window = WindUI:CreateWindow({
+    Title  = "RYEENZY | HUB",
+    Icon   = "shield",
+    Author = "by RYEENZYEXP",
+    Folder = "RYEENZY_HUB_VD",
+    Size   = UDim2.fromOffset(600, 480),
+    MinSize = Vector2.new(560, 360),
+    MaxSize = Vector2.new(860, 580),
+    ToggleKey = Enum.KeyCode.K,
+    Transparent  = true,
+    Theme        = "MacOS Dark",
+    Resizable    = true,
+    SideBarWidth = 200,
+    BackgroundImageTransparency = 0.42,
+    HideSearchBar = false,
+    ScrollBarEnabled = false,
+    Background = "rbxassetid://74044845995165",
+    User = {
+        Enabled = true, Anonymous = false,
+        Callback = function() print("user clicked") end,
+    },
+    Topbar = { Height = 44, ButtonsType = "Mac" },
+})
+
+-- ── OPEN BUTTON ───────────────────────────────────────────────
+local OpenBtn = Window:EditOpenButton({
+    Title        = "RYEENZY | HUB",
+    Icon         = "shield",
+    CornerRadius = UDim.new(0, 14),
+    StrokeThickness = 3,
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromHex("#2C2C2E")),
+        ColorSequenceKeypoint.new(1, Color3.fromHex("#45454a")),
+    }),
+    OnlyMobile = false, Enabled = true, Draggable = true,
+})
+task.spawn(function()
+    while true do
+        TweenService:Create(OpenBtn, TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Rotation=8}):Play()
+        task.wait(6)
+        TweenService:Create(OpenBtn, TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Rotation=-8}):Play()
+        task.wait(6)
+    end
+end)
+
+-- ── TAGS ──────────────────────────────────────────────────────
+Window:Tag({ Title="v1.0.0", Icon="tag", Color=Color3.fromHex("#262727"), Radius=8 })
+
+local currentFPSTag
+local _frames, _lastT = 0, os.clock()
+RunService.RenderStepped:Connect(function()
+    _frames += 1
+    if os.clock() - _lastT >= 1 then
+        local fps = _frames _frames=0 _lastT=os.clock()
+        if currentFPSTag then pcall(function() currentFPSTag:Destroy() end) end
+        currentFPSTag = Window:Tag({ Title="FPS: "..fps, Icon="activity", Color=Color3.fromHex("#262727"), Radius=8 })
+    end
+end)
+
+-- ════════════════════════════════════════════════════════════════
+--  NOTIFY HELPER
+-- ════════════════════════════════════════════════════════════════
+local function notify(title, content, icon, dur)
+    WindUI:Notify({ Title=title, Content=content, Icon=icon or "info", Duration=dur or 3 })
+end
+
+-- ════════════════════════════════════════════════════════════════
+--  TAB 1 — PLAYER
+-- ════════════════════════════════════════════════════════════════
+local TPlayer = Window:Tab({ Title="Player", Icon="user" })
+
+TPlayer:Toggle({
+    Title="No Clip", Icon="box-select", Desc="Tembus semua objek",
+    Value=false, Callback=function(v) setNoClip(v) notify("No Clip", v and "ON" or "OFF","layers") end
+})
+TPlayer:Toggle({
+    Title="Fly", Icon="plane", Desc="Terbang bebas (WASD + Space/Ctrl)",
+    Value=false, Callback=function(v) setFly(v) notify("Fly", v and "ON" or "OFF","plane") end
+})
+TPlayer:Slider({
+    Title="Fly Speed", Icon="wind", Desc="Kecepatan terbang",
+    Value={Min=10, Max=300, Default=60},
+    Callback=function(v) S.FlySpeed=v end
+})
+TPlayer:Divider()
+TPlayer:Toggle({
+    Title="Speed Hack", Icon="zap", Desc="Naikkan WalkSpeed",
+    Value=false, Callback=function(v)
+        S.SpeedHack=v applySpeed() notify("SpeedHack", v and "ON" or "OFF","zap")
+    end
+})
+TPlayer:Slider({
+    Title="Walk Speed", Icon="move", Desc="Nilai WalkSpeed saat Speed ON",
+    Value={Min=16, Max=500, Default=50},
+    Callback=function(v) S.SpeedValue=v if S.SpeedHack then applySpeed() end end
+})
+TPlayer:Divider()
+TPlayer:Toggle({
+    Title="Infinity Jump", Icon="arrow-up", Desc="Jump tanpa batas",
+    Value=false, Callback=function(v) S.InfJump=v notify("InfJump", v and "ON" or "OFF","arrow-up") end
+})
+TPlayer:Toggle({
+    Title="Anti AFK", Icon="shield", Desc="Tidak di-kick karena idle",
+    Value=true, Callback=function(v) S.AntiAFK=v end
+})
+TPlayer:Divider()
+
+-- Teleport to Player
+local playerDD
+local selPlayer = ""
+playerDD = TPlayer:Dropdown({
+    Title="Target Player", Icon="users",
+    Values=getPlayerNames(), Value=getPlayerNames()[1],
+    Callback=function(v) selPlayer=v end
+})
+TPlayer:Button({
+    Title="Refresh List", Icon="refresh-cw",
+    Callback=function()
+        local names = getPlayerNames()
+        selPlayer = names[1]
+        pcall(function() playerDD:Refresh(names) end)
+    end
+})
+TPlayer:Button({
+    Title="Teleport ke Player", Icon="navigation", Color=Color3.fromHex("#22c55e"),
+    Callback=function()
+        if selPlayer=="" or selPlayer=="(No Players)" then
+            notify("Teleport","Pilih player dulu!","alert-circle",2) return
+        end
+        teleportToPlayer(selPlayer)
+        notify("Teleport","Teleport ke "..selPlayer,"navigation",2)
+    end
+})
+
+-- ════════════════════════════════════════════════════════════════
+--  TAB 2 — SURVIVOR
+-- ════════════════════════════════════════════════════════════════
+local TSurv = Window:Tab({ Title="Survivor", Icon="heart" })
+
+-- Auto Parry
+local SParry = TSurv:Section({ Title="Auto Parry", Icon="shield" })
+SParry:Toggle({
+    Title="Auto Parry", Icon="shield-check", Desc="Otomatis parry saat killer dekat",
+    Value=false, Callback=function(v)
+        setAutoParry(v) notify("Auto Parry", v and "ON" or "OFF","shield-check")
+    end
+})
+SParry:Slider({
+    Title="Parry Range", Icon="radius",
+    Desc="Jarak maksimum trigger parry (studs)",
+    Value={Min=2, Max=50, Default=15},
+    Callback=function(v) S.ParryRange=v end
+})
+SParry:Slider({
+    Title="Face Killer Angle", Icon="eye",
+    Desc="0 = killer harus tepat menghadap | 180 = selalu trigger",
+    Value={Min=0, Max=180, Default=90},
+    Callback=function(v) S.FaceKillerAngle=v end
+})
+SParry:Slider({
+    Title="Parry Delay", Icon="clock",
+    Desc="Delay sebelum parry (detik)",
+    Value={Min=0, Max=1, Default=0.05},
+    Callback=function(v) S.ParryDelay=v end
+})
+
+-- Silent Aim
+local SAim = TSurv:Section({ Title="Silent Aim", Icon="crosshair" })
+SAim:Toggle({
+    Title="Silent Aim", Icon="crosshair", Desc="Snap hit ke target terdekat",
+    Value=false, Callback=function(v) S.SilentAim=v notify("Silent Aim", v and "ON" or "OFF","crosshair") end
+})
+SAim:Slider({
+    Title="Aim Radius (FOV)", Icon="circle",
+    Desc="Radius lingkaran target (px)",
+    Value={Min=10, Max=400, Default=120},
+    Callback=function(v) S.AimRadius=v end
+})
+SAim:Slider({
+    Title="Aim Smooth", Icon="move",
+    Desc="0=instant, 1=sangat smooth",
+    Value={Min=0, Max=1, Default=0.3},
+    Callback=function(v) S.AimSmooth=v end
+})
+SAim:Dropdown({
+    Title="Target Silent Aim", Icon="target",
+    Values={"Killer","Survivor","All"},
+    Value="Killer",
+    Callback=function(v) S.AimTarget=v end
+})
+
+-- Silent Laser
+local SLaser = TSurv:Section({ Title="Silent Laser", Icon="zap" })
+SLaser:Toggle({
+    Title="Silent Laser", Icon="zap",
+    Desc="Hit registrasi langsung ke target aim",
+    Value=false,
+    Callback=function(v) S.SilentLaser=v notify("Silent Laser", v and "ON" or "OFF","zap") end
+})
+
+-- Auto Generator
+local SGen = TSurv:Section({ Title="Auto Generator", Icon="settings" })
+SGen:Toggle({
+    Title="Auto Generator", Icon="settings",
+    Desc="Otomatis repair generator terdekat",
+    Value=false,
+    Callback=function(v) setAutoGen(v) notify("Auto Gen", v and "ON" or "OFF","settings") end
+})
+
+-- ════════════════════════════════════════════════════════════════
+--  TAB 3 — KILLER
+-- ════════════════════════════════════════════════════════════════
+local TKill = Window:Tab({ Title="Killer", Icon="sword" })
+
+TKill:Toggle({
+    Title="Silent Aim (Veil)", Icon="crosshair",
+    Desc="Aim snap ke survivor (mode killer)",
+    Value=false,
+    Callback=function(v)
+        S.KillerSilentAim=v notify("Killer Silent Aim", v and "ON" or "OFF","crosshair")
+    end
+})
+TKill:Toggle({
+    Title="Spear Gravity", Icon="arrow-right",
+    Desc="Spear terbang lurus tanpa gravitasi",
+    Value=false,
+    Callback=function(v)
+        setSpearGravity(v) notify("Spear Gravity", v and "ON" or "OFF","arrow-right")
+    end
+})
+TKill:Toggle({
+    Title="Snap Line", Icon="git-branch",
+    Desc="Tampilkan garis dari killer ke target terdekat",
+    Value=false,
+    Callback=function(v)
+        S.SnapLine=v buildSnapLine()
+        notify("Snap Line", v and "ON" or "OFF","git-branch")
+    end
+})
+TKill:Toggle({
+    Title="Aim Prediksi", Icon="navigation",
+    Desc="Prediksi posisi survivor saat lempar",
+    Value=false,
+    Callback=function(v)
+        S.AimPredict=v notify("Aim Prediksi", v and "ON" or "OFF","navigation")
+    end
+})
+TKill:Toggle({
+    Title="Anti Stun", Icon="shield",
+    Desc="Batalkan efek stun dari pallet",
+    Value=false,
+    Callback=function(v)
+        setAntiStun(v) notify("Anti Stun", v and "ON" or "OFF","shield")
+    end
+})
+TKill:Toggle({
+    Title="Anti Flashlight", Icon="sun-off",
+    Desc="Disable semua flashlight survivor",
+    Value=false,
+    Callback=function(v)
+        setAntiFlashlight(v) notify("Anti Flashlight", v and "ON" or "OFF","sun-off")
+    end
+})
+
+-- ════════════════════════════════════════════════════════════════
+--  TAB 4 — VISUAL
+-- ════════════════════════════════════════════════════════════════
+local TVis = Window:Tab({ Title="Visual", Icon="eye" })
+
+-- ESP
+local SESP = TVis:Section({ Title="ESP", Icon="scan" })
+SESP:Toggle({
+    Title="ESP Survivor", Icon="user-check",
+    Desc="Highlight + info survivor (nama, HP, jarak)",
+    Value=false,
+    Callback=function(v)
+        S.ESPSurvivor=v
+        if not v then
+            for model, data in pairs(ESPData) do
+                if data.type=="Survivor" then removeESP(model) end
+            end
+        end
+        notify("ESP Survivor", v and "ON" or "OFF","user-check")
+    end
+})
+SESP:Toggle({
+    Title="ESP Killer", Icon="skull",
+    Desc="Highlight + info killer (nama, HP, jarak, item)",
+    Value=false,
+    Callback=function(v)
+        S.ESPKiller=v
+        if not v then
+            for model, data in pairs(ESPData) do
+                if data.type=="Killer" then removeESP(model) end
+            end
+        end
+        notify("ESP Killer", v and "ON" or "OFF","skull")
+    end
+})
+SESP:Toggle({
+    Title="ESP Generator", Icon="settings",
+    Desc="Highlight generator + persentase repair + jarak",
+    Value=false,
+    Callback=function(v)
+        S.ESPGenerator=v refreshGenESP()
+        notify("ESP Generator", v and "ON" or "OFF","settings")
+    end
+})
+SESP:Toggle({
+    Title="ESP Hook", Icon="anchor",
+    Desc="Tampilkan posisi semua hook",
+    Value=false,
+    Callback=function(v)
+        S.ESPHook=v refreshHookESP()
+        notify("ESP Hook", v and "ON" or "OFF","anchor")
+    end
+})
+SESP:Toggle({
+    Title="ESP Pallet", Icon="layout",
+    Desc="Tampilkan posisi semua pallet",
+    Value=false,
+    Callback=function(v)
+        S.ESPPallet=v refreshPalletESP()
+        notify("ESP Pallet", v and "ON" or "OFF","layout")
+    end
+})
+
+-- Killer Notif
+local SNotif = TVis:Section({ Title="Killer Notifikasi", Icon="alert-triangle" })
+SNotif:Toggle({
+    Title="Killer Notifikasi", Icon="alert-triangle",
+    Desc="Ikon ⚠ di atas kepala survivor jika killer dekat",
+    Value=false,
+    Callback=function(v)
+        S.KillerNotif=v
+        if not v then refreshKillerNotif() end
+        notify("Killer Notif", v and "ON" or "OFF","alert-triangle")
+    end
+})
+
+-- ════════════════════════════════════════════════════════════════
+--  TAB 5 — SETTINGS
+-- ════════════════════════════════════════════════════════════════
+local TSet = Window:Tab({ Title="Settings", Icon="settings" })
+
+-- Camera FOV
+TSet:Slider({
+    Title="Camera FOV", Icon="camera",
+    Desc="Field of View kamera",
+    Value={Min=40, Max=130, Default=70},
+    Callback=function(v) setFOV(v) end
+})
+
+-- Crosshair
+TSet:Dropdown({
+    Title="Crosshair Style", Icon="crosshair",
+    Values={"Dot","Cross","Circle","T-Shape","Plus","None"},
+    Value="Dot",
+    Callback=function(v)
+        S.Crosshair=v buildCrosshair(v)
+        notify("Crosshair", v, "crosshair", 2)
+    end
+})
+
+TSet:Divider()
+
+TSet:Toggle({
+    Title="No Texture", Icon="image-off",
+    Desc="Hilangkan semua tekstur di map",
+    Value=false,
+    Callback=function(v)
+        setNoTexture(v) notify("No Texture", v and "ON" or "OFF","image-off")
+    end
+})
+TSet:Toggle({
+    Title="Full Bright", Icon="sun",
+    Desc="Map selalu terang, tanpa shadow",
+    Value=false,
+    Callback=function(v)
+        setFullBright(v) notify("Full Bright", v and "ON" or "OFF","sun")
+    end
+})
+TSet:Toggle({
+    Title="No Fog", Icon="wind",
+    Desc="Hilangkan efek fog",
+    Value=false,
+    Callback=function(v)
+        setNoFog(v) notify("No Fog", v and "ON" or "OFF","wind")
+    end
+})
+
+-- ════════════════════════════════════════════════════════════════
+--  TAB 6 — CONFIG
+-- ════════════════════════════════════════════════════════════════
+local TCfg = Window:Tab({ Title="Config", Icon="folder" })
+
+local configName = ""
+local selConfig = ""
+local configDD
+
+local function refreshConfigDD()
+    local list = getConfigList()
+    selConfig = list[1]
+    pcall(function() configDD:Refresh(list) end)
+end
+
+configDD = TCfg:Dropdown({
+    Title="Config List", Icon="list",
+    Values=getConfigList(), Value=getConfigList()[1],
+    Callback=function(v) selConfig=v end
+})
+
+TCfg:Input({
+    Title="Nama Config", Icon="file-text",
+    Placeholder="contoh: MySetting",
+    Callback=function(v) configName=v end
+})
+
+TCfg:Button({
+    Title="Save Config", Icon="save", Color=Color3.fromHex("#22c55e"),
+    Callback=function()
+        local name = configName~="" and configName or ("config_"..os.time())
+        if saveConfig(name) then
+            notify("Config","Tersimpan: "..name,"save",3)
+            refreshConfigDD()
+        else
+            notify("Config","Gagal simpan!","alert-circle",3)
+        end
+    end
+})
+TCfg:Button({
+    Title="Load Config", Icon="folder-open", Color=Color3.fromHex("#3b82f6"),
+    Callback=function()
+        if selConfig=="" or selConfig=="(No Configs)" then
+            notify("Config","Pilih config dulu!","alert-circle",2) return
+        end
+        if loadConfig(selConfig) then
+            notify("Config","Loaded: "..selConfig,"folder-open",3)
+        else
+            notify("Config","Gagal load!","alert-circle",3)
+        end
+    end
+})
+TCfg:Button({
+    Title="Delete Config", Icon="trash-2", Color=Color3.fromHex("#ef4444"),
+    Callback=function()
+        if selConfig=="" or selConfig=="(No Configs)" then
+            notify("Config","Pilih config dulu!","alert-circle",2) return
+        end
+        deleteConfig(selConfig)
+        notify("Config","Dihapus: "..selConfig,"trash-2",3)
+        refreshConfigDD()
+    end
+})
+
+TCfg:Divider()
+
+-- UI Theme switcher
+TCfg:Dropdown({
+    Title="UI Theme", Icon="palette",
+    Values={"MacOS Dark","Dark","Light","Crimson","Midnight","Rose","Indigo","Emerald","Amber"},
+    Value="MacOS Dark",
+    Callback=function(v)
+        pcall(function() WindUI:SetTheme(v) end)
+        notify("Theme","Set ke: "..v,"palette",2)
+    end
+})
+
+-- ════════════════════════════════════════════════════════════════
+--  STARTUP
+-- ════════════════════════════════════════════════════════════════
+buildCrosshair(S.Crosshair)
+
+notify(
+    "⚡ RYEENZY | HUB",
+    "Violence Distrik Edition\nToggle: K\nby RYEENZYEXP",
+    "shield", 5
+)
+
+print("⚡ [RYEENZY | HUB] Violence Distrik — Loaded | "..LP.Name)
