@@ -2435,7 +2435,6 @@ print("[RYEENZY | HUB] Loaded")
 -- TABS SETUP
 ----------------------------------------------------------------
 TabProfile        = Window:CreateTab({ Name = "Profile",   Icon = "rbxassetid://16932740082" })
-local kito        = Window:CreateTab({ Name = "Extras",    Icon = "rbxassetid://16932740082" })
 local Tab4        = Window:CreateTab({ Name = "Generator", Icon = "rbxassetid://16932740082" })
 local Tab1        = Window:CreateTab({ Name = "Survivor",  Icon = "rbxassetid://16932740082" })
 local TabKiller   = Window:CreateTab({ Name = "Killer",    Icon = "rbxassetid://16932740082" })
@@ -2774,21 +2773,29 @@ CrosshairSection:AddSlider({ Title = "Crosshair Size", Content = "Adjust crossha
 -- Kembalikan ke 1 Kolom
 Tab2:AddSection("Player & Entity Visuals")
 
-PlayerGroup1:AddToggle({ Title = "ESP Survivor (Highlight)", Content = "", Default = false, Callback = function(v) ESP_Survivor_Highlight = v; RefreshESP() end  })
+-- Fluriore tidak pakai Group, pakai section langsung
+Tab2:AddToggle({ Title = "ESP Survivor (Name)", Content = "", Default = false, Callback = function(v) ESP_Survivor_Name = v; RefreshESP() end })
+Tab2:AddToggle({ Title = "ESP Survivor (Highlight)", Content = "", Default = false, Callback = function(v) ESP_Survivor_Highlight = v; RefreshESP() end })
+Tab2:AddToggle({ Title = "ESP Killer (Name)", Content = "", Default = false, Callback = function(v) ESP_Killer_Name = v; RefreshESP() end })
+Tab2:AddToggle({ Title = "ESP Killer (Highlight)", Content = "", Default = false, Callback = function(v) ESP_Killer_Highlight = v; RefreshESP() end })({ Title = "ESP Survivor (Highlight)", Content = "", Default = false, Callback = function(v) ESP_Survivor_Highlight = v; RefreshESP() end  })
 
-PlayerGroup2:AddToggle({ Title = "ESP Killer (Highlight)", Content = "", Default = false, Callback = function(v) ESP_Killer_Highlight = v; RefreshESP() end  })
+
 Tab2:AddToggle({ Title = "ESP SCP/Zombie", Content = "Menampilkan SCP & Zombie", Default = false, Callback = function(v)
         ESP_SCP=v
     end
  })
 -- Kembalikan ke 1 Kolom
 Tab2:AddSection("Object Visuals")
-ObjectGroup1:AddToggle({ Title = "ESP Pallet", Content = "Displays Pallets.", Default = false, Callback = function(v) ESP_Pallet = v; RefreshESP() end  })
+Tab2:AddToggle({ Title = "ESP Generator", Content = "Displays unfinished Gens.", Default = false, Callback = function(v) ESP_Generator = v; RefreshESP() end })
+Tab2:AddToggle({ Title = "ESP Pallet", Content = "Displays Pallets.", Default = false, Callback = function(v) ESP_Pallet = v; RefreshESP() end })
+Tab2:AddToggle({ Title = "ESP Exit Gate", Content = "Displays Exit Gates.", Default = false, Callback = function(v) ESP_Gate = v; RefreshESP() end })
+Tab2:AddToggle({ Title = "ESP Hook", Content = "Displays Hook locations.", Default = false, Callback = function(v) ESP_Hook = v; RefreshESP() end })({ Title = "ESP Pallet", Content = "Displays Pallets.", Default = false, Callback = function(v) ESP_Pallet = v; RefreshESP() end  })
 
-ObjectGroup2:AddToggle({ Title = "ESP Hook", Content = "Displays Hook locations.", Default = false, Callback = function(v) ESP_Hook = v; RefreshESP() end  })
+
 
 -- Kembalikan ke 1 Kolom
 Tab2:AddSection("World Optimization")
+local World = Tab2
 Tab2:AddToggle({ Title = "Remove All Visual Effects", Content = "Menyapu bersih semua efek Blur, Bloom, DoF, SunRays, dan Kabut.", Default = false, Callback = function(v) 
         if v then
             -- [1] NYALAKAN: Simpan dan Sembunyikan Efek
@@ -3208,19 +3215,35 @@ Spoof:AddButton({ Title = "Apply Spoof Data", Content = "", Callback = function(
 ----------------------------------------------------------------
 -- SETTINGS & CONFIG SYSTEM (WINDUI NATIVE)
 ----------------------------------------------------------------
-local ConfigManager = Window.ConfigManager
-local SaveName = "RYEENZY_HUB"
-local Themes = {}
+-- Fluriore tidak punya ConfigManager bawaan, pakai writefile/readfile
+local SaveName = "RYEENZY_HUB_config.json"
 
--- Ambil tema dengan aman
-pcall(function()
-    for name, _ in pairs(WindUI.Themes) do t_insert(Themes, name) end
-end)
+-- Config Manager sederhana berbasis writefile/readfile
+local ConfigManager = {}
+ConfigManager.Config = function(self, name)
+    return {
+        Save = function()
+            local ok, data = pcall(function() return HttpService:JSONEncode(getgenv().RYEENZY_FLAGS or {}) end)
+            if ok and writefile then writefile(name..".json", data) end
+        end,
+        Load = function()
+            if readfile then
+                local ok, data = pcall(function() return readfile(name..".json") end)
+                if ok and data then
+                    local ok2, t = pcall(function() return HttpService:JSONDecode(data) end)
+                    if ok2 and type(t) == "table" then getgenv().RYEENZY_FLAGS = t end
+                end
+            end
+        end
+    }
+end
+ConfigManager.CreateConfig = ConfigManager.Config
 
 -- ==========================================
 -- 1. CONFIGURATION SYSTEM
 -- ==========================================
 TabSettings:AddSection("Configuration System")
+local TabConfig = TabSettings
 TabConfig:AddButton({ Title = "Save Config", Content = "", Callback = function()
         -- Proteksi pcall agar executor tidak crash jika tidak support penyimpanan file
         local success, err = pcall(function()
@@ -3262,8 +3285,7 @@ TabSettings:AddToggle({ Title = "Anti-Logger (Bypass Anti-Cheat)", Content = "Me
 -- ==========================================
 TabSettings:AddSection("Window & Interface")
 
-TabSettings:AddDropdown({ Title = "Select Theme", Content = "Pilih tema warna antarmuka RYEENZY | HUB.", Multi = false, Options = {}, Default = {}, Callback = function(v) pcall(function() WindUI:SetTheme(v) end) end 
- })
+-- Theme selector tidak tersedia di Fluriore UI
 
 TabSettings:AddButton({ Title = "Unload RYEENZY | HUB", Content = "Membatalkan semua fungsi, menghapus UI, dan membersihkan layar.", Callback = function()
         getgenv().RYEENZY_RUNNING = false
