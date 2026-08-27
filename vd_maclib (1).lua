@@ -75,11 +75,13 @@ end
 -- LOAD MACLIB (PENGGANTI WINDUI)
 -- =========================================================
 
+-- [FIX] Script pakai OrionLib API (MakeWindow/MakeTab/AddToggle dll)
+-- MacLib punya API beda total — diganti OrionLib yang API-nya match
 local MacLib
 do
     local ok,res=pcall(function()
         return loadstring(game:HttpGet(
-            "https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"
+            "https://raw.githubusercontent.com/shlexware/Orion/main/source"
         ))()
     end)
     if ok and res then
@@ -88,15 +90,15 @@ do
 end
 
 if MacLib then
-    print("[RYEENZY] MacLib Loaded")
+    print("[RYEENZY] OrionLib Loaded")
 else
-    warn("[RYEENZY] Failed Load MacLib")
+    warn("[RYEENZY] Failed Load OrionLib")
     pcall(function()
         game:GetService("StarterGui"):SetCore(
             "SendNotification",
             {
                 Title="RYEENZY | HUB",
-                Text="Failed loading MacLib"
+                Text="Failed loading UI Library"
             }
         )
     end)
@@ -109,15 +111,17 @@ end
 -- =========================================================
 local WindUI = {}
 function WindUI:Notify(t)
+    -- [FIX] OrionLib pakai MakeNotification, bukan Notify
     pcall(function()
-        MacLib:Notify({
-            Title   = t.Title   or "RYEENZY",
+        MacLib:MakeNotification({
+            Name    = t.Title   or "RYEENZY",
             Content = t.Content or t.Text or "",
-            Duration= t.Duration or 3,
+            Image   = "rbxassetid://4483345998",
+            Time    = t.Duration or 3,
         })
     end)
 end
-function WindUI:SetNotificationLower() end -- no-op, MacLib handles positioning
+function WindUI:SetNotificationLower() end
 
 -- =========================================================
 -- ANTI MEMORY LEAK
