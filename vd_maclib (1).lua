@@ -1,4 +1,11 @@
-if not game:IsLoaded() then game.Loaded:Wait() end
+-- [FIX] guard IsLoaded — beberapa executor tidak punya method ini
+if game.IsLoaded then
+    if not game:IsLoaded() then game.Loaded:Wait() end
+else
+    -- fallback: tunggu sampai workspace selesai replicate
+    local ok = pcall(function() game:GetService("ContentProvider"):PreloadAsync({}) end)
+    task.wait(1)
+end
 local Players=game:GetService("Players")
 while not Players.LocalPlayer do task.wait() end
 while not workspace.CurrentCamera do task.wait() end
@@ -70,33 +77,13 @@ end
 
 local MacLib
 do
-    -- Beberapa executor tidak follow HTTP redirect dari /releases/latest/download/
-    -- sehingga game:HttpGet mengembalikan HTML bukan kode Lua → loadstring crash.
-    -- Solusi: coba raw URL langsung, validasi hasilnya bukan HTML.
-    local MACLIB_URLS = {
-        "https://raw.githubusercontent.com/biggaboy212/Maclib/main/maclib.lua",
-        "https://raw.githubusercontent.com/biggaboy212/Maclib/main/maclib.txt",
-        "https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt",
-    }
-    for _, url in ipairs(MACLIB_URLS) do
-        local ok, res = pcall(function()
-            local src = game:HttpGet(url)
-            -- tolak jika dapat redirect HTML
-            assert(
-                type(src) == "string"
-                and #src > 200
-                and not src:find("<!DOCTYPE", 1, true)
-                and not src:find("<html", 1, true),
-                "HttpGet returned HTML/redirect instead of Lua source"
-            )
-            local fn, compileErr = loadstring(src)
-            assert(fn, "loadstring failed: " .. tostring(compileErr))
-            return fn()
-        end)
-        if ok and type(res) == "table" then
-            MacLib = res
-            break
-        end
+    local ok,res=pcall(function()
+        return loadstring(game:HttpGet(
+            "https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"
+        ))()
+    end)
+    if ok and res then
+        MacLib=res
     end
 end
 
@@ -387,8 +374,7 @@ local HitboxExpander=false
 local HitboxSize=15
 
 local aimRayParams=RaycastParams.new()
--- RaycastFilterType.Blacklist deprecated → gunakan Exclude jika ada
-aimRayParams.FilterType = Enum.RaycastFilterType.Exclude or Enum.RaycastFilterType.Blacklist
+aimRayParams.FilterType=Enum.RaycastFilterType.Blacklist
 
 local SilentActions=false
 local AntiFallDamage=false
@@ -640,8 +626,18 @@ ParryRing.Height = 0.05
 local radius = tonumber(ParryDistance) or 10
 ParryRing.Radius = radius
 ParryRing.CFrame = CFrame.new(0,-2.8,0) * CFrame.Angles(math.rad(90),0,0)
-ParryRing.Adornee = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or nil
+-- [FIX] HumanoidRootPart tidak terdefinisi di scope ini — ambil dari character
+do
+    local _char = LocalPlayer.Character
+    ParryRing.Adornee = _char and _char:FindFirstChild("HumanoidRootPart") or nil
+end
 ParryRing.Parent = TargetGui
+
+-- [FIX] Keep ParryRing.Adornee updated setiap respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    local hrp = char:WaitForChild("HumanoidRootPart", 5)
+    if hrp then ParryRing.Adornee = hrp end
+end)
 
 ----------------------------------------------------------------
 -- UTILITY FUNCTIONS (ESP LOGIC) - OPTIMIZED
@@ -1670,31 +1666,23 @@ end
 -- ============================================================
 -- =========================================================
 
--- Validasi MacLib API sebelum dipanggil
-assert(
-    type(MacLib.MakeWindow) == "function",
-    "[RYEENZY] MacLib loaded tapi MacLib.MakeWindow tidak ditemukan — versi MacLib mungkin berubah API-nya"
-)
-
-local winOk, Window = pcall(function()
-    return MacLib:MakeWindow({
-        Name            = "RYEENZY | HUB",
-        LoadingTitle    = "RYEENZY | HUB",
-        LoadingSubtitle = "by Ryeenzydevs",
-        ConfigurationSaving = {
-            Enabled    = true,
-            FolderName = "Rynzz",
-            FileName   = "RYEENZY_HUB",
-        },
-        Discord  = { Enabled = false },
-        KeySystem = false,
-    })
-end)
-
-if not winOk or not Window then
-    warn("[RYEENZY] MacLib:MakeWindow gagal: " .. tostring(Window))
-    return
-end
+local Window = MacLib:MakeWindow({
+    Name            = "RYEENZY | HUB",
+    LoadingTitle    = "RYEENZY | HUB",
+    LoadingSubtitle = "by Ryeenzydevs",
+    ConfigurationSaving = {
+        Enabled  = true,
+        FolderName = "Rynzz",
+        FileName   = "RYEENZY_HUB",
+    },
+    Discord = {
+        Enabled     = false,
+    },
+    KeySystem       = false,
+    -- ===== AUTO SCALE & OPEN BUTTON =====
+    -- MacLib auto-scale: UI menggunakan UDim2.fromScale secara internal
+    -- OpenButton muncul otomatis saat UI disembunyikan (tombol floating)
+})
 
 -- =========================================================
 -- TAB SETUP
