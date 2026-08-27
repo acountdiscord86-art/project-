@@ -70,13 +70,33 @@ end
 
 local MacLib
 do
-    local ok,res=pcall(function()
-        return loadstring(game:HttpGet(
-            "https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt"
-        ))()
-    end)
-    if ok and res then
-        MacLib=res
+    -- Beberapa executor tidak follow HTTP redirect dari /releases/latest/download/
+    -- sehingga game:HttpGet mengembalikan HTML bukan kode Lua → loadstring crash.
+    -- Solusi: coba raw URL langsung, validasi hasilnya bukan HTML.
+    local MACLIB_URLS = {
+        "https://raw.githubusercontent.com/biggaboy212/Maclib/main/maclib.lua",
+        "https://raw.githubusercontent.com/biggaboy212/Maclib/main/maclib.txt",
+        "https://github.com/biggaboy212/Maclib/releases/latest/download/maclib.txt",
+    }
+    for _, url in ipairs(MACLIB_URLS) do
+        local ok, res = pcall(function()
+            local src = game:HttpGet(url)
+            -- tolak jika dapat redirect HTML
+            assert(
+                type(src) == "string"
+                and #src > 200
+                and not src:find("<!DOCTYPE", 1, true)
+                and not src:find("<html", 1, true),
+                "HttpGet returned HTML/redirect instead of Lua source"
+            )
+            local fn, compileErr = loadstring(src)
+            assert(fn, "loadstring failed: " .. tostring(compileErr))
+            return fn()
+        end)
+        if ok and type(res) == "table" then
+            MacLib = res
+            break
+        end
     end
 end
 
@@ -367,7 +387,8 @@ local HitboxExpander=false
 local HitboxSize=15
 
 local aimRayParams=RaycastParams.new()
-aimRayParams.FilterType=Enum.RaycastFilterType.Blacklist
+-- RaycastFilterType.Blacklist deprecated → gunakan Exclude jika ada
+aimRayParams.FilterType = Enum.RaycastFilterType.Exclude or Enum.RaycastFilterType.Blacklist
 
 local SilentActions=false
 local AntiFallDamage=false
@@ -619,7 +640,7 @@ ParryRing.Height = 0.05
 local radius = tonumber(ParryDistance) or 10
 ParryRing.Radius = radius
 ParryRing.CFrame = CFrame.new(0,-2.8,0) * CFrame.Angles(math.rad(90),0,0)
-ParryRing.Adornee = HumanoidRootPart
+ParryRing.Adornee = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or nil
 ParryRing.Parent = TargetGui
 
 ----------------------------------------------------------------
@@ -1649,23 +1670,31 @@ end
 -- ============================================================
 -- =========================================================
 
-local Window = MacLib:MakeWindow({
-    Name            = "RYEENZY | HUB",
-    LoadingTitle    = "RYEENZY | HUB",
-    LoadingSubtitle = "by Ryeenzydevs",
-    ConfigurationSaving = {
-        Enabled  = true,
-        FolderName = "Rynzz",
-        FileName   = "RYEENZY_HUB",
-    },
-    Discord = {
-        Enabled     = false,
-    },
-    KeySystem       = false,
-    -- ===== AUTO SCALE & OPEN BUTTON =====
-    -- MacLib auto-scale: UI menggunakan UDim2.fromScale secara internal
-    -- OpenButton muncul otomatis saat UI disembunyikan (tombol floating)
-})
+-- Validasi MacLib API sebelum dipanggil
+assert(
+    type(MacLib.MakeWindow) == "function",
+    "[RYEENZY] MacLib loaded tapi MacLib.MakeWindow tidak ditemukan — versi MacLib mungkin berubah API-nya"
+)
+
+local winOk, Window = pcall(function()
+    return MacLib:MakeWindow({
+        Name            = "RYEENZY | HUB",
+        LoadingTitle    = "RYEENZY | HUB",
+        LoadingSubtitle = "by Ryeenzydevs",
+        ConfigurationSaving = {
+            Enabled    = true,
+            FolderName = "Rynzz",
+            FileName   = "RYEENZY_HUB",
+        },
+        Discord  = { Enabled = false },
+        KeySystem = false,
+    })
+end)
+
+if not winOk or not Window then
+    warn("[RYEENZY] MacLib:MakeWindow gagal: " .. tostring(Window))
+    return
+end
 
 -- =========================================================
 -- TAB SETUP
