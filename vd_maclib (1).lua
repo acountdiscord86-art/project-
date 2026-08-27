@@ -75,8 +75,7 @@ end
 -- LOAD MACLIB (PENGGANTI WINDUI)
 -- =========================================================
 
--- [FIX] Script pakai OrionLib API (MakeWindow/MakeTab/AddToggle dll)
--- MacLib punya API beda total — diganti OrionLib yang API-nya match
+-- MacLib dimuat dengan benar (URL tetap MacLib, API sudah dikonversi)
 local MacLib
 do
     local ok,res=pcall(function()
@@ -113,11 +112,10 @@ local WindUI = {}
 function WindUI:Notify(t)
     -- [FIX] OrionLib pakai MakeNotification, bukan Notify
     pcall(function()
-        MacLib:MakeNotification({
-            Name    = t.Title   or "RYEENZY",
-            Content = t.Content or t.Text or "",
-            Image   = "rbxassetid://4483345998",
-            Time    = t.Duration or 3,
+        Window:Notify({
+            Title = t.Title   or "RYEENZY",
+            Description = t.Content or t.Text or "",
+            Lifetime = t.Duration or 3,
         })
     end)
 end
@@ -276,7 +274,7 @@ task.spawn(function()
                     
                     WindUI:Notify({ 
                         Title = "Map Loaded", 
-                        Content = "Menemukan " .. palletCount .. " Pallet & " .. genCount .. " Gen. Radar Aktif!", 
+                        Description = "Menemukan " .. palletCount .. " Pallet & " .. genCount .. " Gen. Radar Aktif!", 
                     })
                 end
             end)
@@ -1670,41 +1668,43 @@ end
 -- ============================================================
 -- =========================================================
 
-local Window = MacLib:MakeWindow({
-    Name            = "RYEENZY | HUB",
-    LoadingTitle    = "RYEENZY | HUB",
-    LoadingSubtitle = "by Ryeenzydevs",
-    ConfigurationSaving = {
-        Enabled  = true,
-        FolderName = "Rynzz",
-        FileName   = "RYEENZY_HUB",
-    },
-    Discord = {
-        Enabled     = false,
-    },
-    KeySystem       = false,
-    -- ===== AUTO SCALE & OPEN BUTTON =====
-    -- MacLib auto-scale: UI menggunakan UDim2.fromScale secara internal
-    -- OpenButton muncul otomatis saat UI disembunyikan (tombol floating)
+local Window = MacLib:Window({
+    Title    = "RYEENZY | HUB",
+    Subtitle = "by Ryeenzydevs",
+    Size     = UDim2.fromOffset(868, 650),
+    DragStyle = 2,
+    ShowUserInfo = false,
+    Keybind  = Enum.KeyCode.RightControl,
 })
+local _TabGroup = Window:TabGroup()
 
 -- =========================================================
 -- TAB SETUP
 -- =========================================================
-local TabProfile  = Window:MakeTab({ Name = "Profile",   Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabExtras   = Window:MakeTab({ Name = "Extras",    Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabGen      = Window:MakeTab({ Name = "Generator", Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabSurvivor = Window:MakeTab({ Name = "Survivor",  Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabKiller   = Window:MakeTab({ Name = "Killer",    Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabCombat   = Window:MakeTab({ Name = "Combat",    Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabVisuals  = Window:MakeTab({ Name = "Visuals",   Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabSpoof    = Window:MakeTab({ Name = "Spoofing",  Icon = "rbxassetid://4483345998",  PremiumOnly = false })
-local TabSettings = Window:MakeTab({ Name = "Settings",  Icon = "rbxassetid://4483345998",  PremiumOnly = false })
+local TabProfile = _TabGroup:Tab({ Name = "Profile", Image = "" })
+local _s_TabProfile = TabProfile:Section({ Side = "Left" })
+local TabExtras = _TabGroup:Tab({ Name = "Extras", Image = "" })
+local _s_TabExtras = TabExtras:Section({ Side = "Left" })
+local TabGen = _TabGroup:Tab({ Name = "Generator", Image = "" })
+local _s_TabGen = TabGen:Section({ Side = "Left" })
+local TabSurvivor = _TabGroup:Tab({ Name = "Survivor", Image = "" })
+local _s_TabSurvivor = TabSurvivor:Section({ Side = "Left" })
+local TabKiller = _TabGroup:Tab({ Name = "Killer", Image = "" })
+local _s_TabKiller = TabKiller:Section({ Side = "Left" })
+local TabCombat = _TabGroup:Tab({ Name = "Combat", Image = "" })
+local _s_TabCombat = TabCombat:Section({ Side = "Left" })
+local TabVisuals = _TabGroup:Tab({ Name = "Visuals", Image = "" })
+local _s_TabVisuals = TabVisuals:Section({ Side = "Left" })
+local TabSpoof = _TabGroup:Tab({ Name = "Spoofing", Image = "" })
+local _s_TabSpoof = TabSpoof:Section({ Side = "Left" })
+local TabSettings = _TabGroup:Tab({ Name = "Settings", Image = "" })
+local _s_TabSettings = TabSettings:Section({ Side = "Left" })
 
 -- =========================================================
 -- TAB: PROFILE
 -- =========================================================
-TabProfile:AddSection({ Name = "Profile Dashboard" })
+local _s_TabProfile_1 = TabProfile:Section({ Side = "Left" })
+_s_TabProfile_1:Label({ Text = "Profile Dashboard" })
 
 local executorName =
     (identifyexecutor and identifyexecutor()) or
@@ -1714,19 +1714,21 @@ local deviceType =
     (UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled)
     and "Mobile" or "PC"
 
-TabProfile:AddLabel("User: " .. LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")")
-TabProfile:AddLabel("User ID: " .. tostring(LocalPlayer.UserId))
-TabProfile:AddLabel("Account Age: " .. tostring(LocalPlayer.AccountAge) .. " Days")
+_s_TabProfile_1:Label({ Text = "User: " .. LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")" })
+_s_TabProfile_3:Label({ Text = "User ID: " .. tostring(LocalPlayer.UserId) })
+_s_TabProfile_3:Label({ Text = "Account Age: " .. tostring(LocalPlayer.AccountAge) .. " Days" })
 
-TabProfile:AddSection({ Name = "System Info" })
-TabProfile:AddLabel("Key: RYEENZY")
-TabProfile:AddLabel("License: RYEENZY")
-TabProfile:AddLabel("Device: " .. deviceType)
-TabProfile:AddLabel("Executor: " .. executorName)
+local _s_TabProfile_2 = TabProfile:Section({ Side = "Left" })
+_s_TabProfile_2:Label({ Text = "System Info" })
+_s_TabProfile_2:Label({ Text = "Key: RYEENZY" })
+_s_TabProfile_2:Label({ Text = "License: RYEENZY" })
+_s_TabProfile_3:Label({ Text = "Device: " .. deviceType })
+_s_TabProfile_3:Label({ Text = "Executor: " .. executorName })
 
-TabProfile:AddSection({ Name = "Credits" })
-TabProfile:AddLabel("RYEENZYEXP — Script Creator")
-TabProfile:AddButton({
+local _s_TabProfile_3 = TabProfile:Section({ Side = "Left" })
+_s_TabProfile_3:Label({ Text = "Credits" })
+_s_TabProfile_3:Label({ Text = "RYEENZYEXP — Script Creator" })
+_s_TabProfile_3:Button({
     Name     = "Copy Discord Link",
     Callback = function()
         local success = pcall(function()
@@ -1742,9 +1744,10 @@ TabProfile:AddButton({
 -- =========================================================
 -- TAB: EXTRAS (VIP — Automation, Moonwalk, Defense)
 -- =========================================================
-TabExtras:AddSection({ Name = "Automatic System" })
+local _s_TabExtras_4 = TabExtras:Section({ Side = "Left" })
+_s_TabExtras_4:Label({ Text = "Automatic System" })
 
-TabExtras:AddToggle({
+_s_TabExtras_4:Toggle({
     Name    = "Auto Play (Smart AI)",
     Default = false,
     Callback = function(v)
@@ -1763,9 +1766,10 @@ TabExtras:AddToggle({
     end
 })
 
-TabExtras:AddSection({ Name = "MoonWalk" })
+local _s_TabExtras_5 = TabExtras:Section({ Side = "Left" })
+_s_TabExtras_5:Label({ Text = "MoonWalk" })
 
-TabExtras:AddToggle({
+_s_TabExtras_5:Toggle({
     Name    = "Moonwalk",
     Default = false,
     Callback = function(v)
@@ -1779,10 +1783,10 @@ TabExtras:AddToggle({
     end
 })
 
-TabExtras:AddSlider({
+_s_TabExtras_5:Slider({
     Name    = "MoonWalk Intensity",
-    Min     = 5,
-    Max     = 50,
+    Minimum = 5,
+    Maximum = 50,
     Default = 11,
     Increment = 1,
     ValueName = "x",
@@ -1791,10 +1795,10 @@ TabExtras:AddSlider({
     end
 })
 
-TabExtras:AddSlider({
+_s_TabExtras_5:Slider({
     Name      = "Speed Boost MoonWalk",
-    Min       = 100,
-    Max       = 150,
+    Minimum = 100,
+    Maximum = 150,
     Default   = 108,
     Increment = 1,
     ValueName = "%",
@@ -1803,9 +1807,10 @@ TabExtras:AddSlider({
     end
 })
 
-TabExtras:AddSection({ Name = "Item VIP" })
+local _s_TabExtras_6 = TabExtras:Section({ Side = "Left" })
+_s_TabExtras_6:Label({ Text = "Item VIP" })
 
-TabExtras:AddToggle({
+_s_TabExtras_6:Toggle({
     Name    = "Silent Aim Pistol",
     Default = false,
     Callback = function(v)
@@ -1818,7 +1823,7 @@ TabExtras:AddToggle({
     end
 })
 
-TabExtras:AddToggle({
+_s_TabExtras_6:Toggle({
     Name    = "Auto Dagger",
     Default = false,
     Callback = function(v)
@@ -1827,7 +1832,7 @@ TabExtras:AddToggle({
     end
 })
 
-TabExtras:AddDropdown({
+_s_TabExtras_6:Dropdown({
     Name    = "Killer Matchup",
     Default = "Auto",
     Options = {"Auto","Abysswalker","Hidden","Killer","Masked","Stalker","Veil","Slasher","Cure"},
@@ -1836,10 +1841,10 @@ TabExtras:AddDropdown({
     end
 })
 
-TabExtras:AddSlider({
+_s_TabExtras_6:Slider({
     Name      = "Parry Distance",
-    Min       = 3,
-    Max       = 25,
+    Minimum = 3,
+    Maximum = 25,
     Default   = 10,
     Increment = 1,
     ValueName = " studs",
@@ -1850,10 +1855,10 @@ TabExtras:AddSlider({
     end
 })
 
-TabExtras:AddSlider({
+_s_TabExtras_6:Slider({
     Name      = "Aim Strictness",
-    Min       = 5,
-    Max       = 30,
+    Minimum = 5,
+    Maximum = 30,
     Default   = 13,
     Increment = 1,
     ValueName = "x0.1",
@@ -1862,10 +1867,10 @@ TabExtras:AddSlider({
     end
 })
 
-TabExtras:AddSlider({
+_s_TabExtras_6:Slider({
     Name      = "Parry Delay (ms)",
-    Min       = -150,
-    Max       = 1000,
+    Minimum = -150,
+    Maximum = 1000,
     Default   = 0,
     Increment = 10,
     ValueName = "ms",
@@ -1874,9 +1879,10 @@ TabExtras:AddSlider({
     end
 })
 
-TabExtras:AddSection({ Name = "Survivor VIP" })
+local _s_TabExtras_7 = TabExtras:Section({ Side = "Left" })
+_s_TabExtras_7:Label({ Text = "Survivor VIP" })
 
-TabExtras:AddToggle({
+_s_TabExtras_7:Toggle({
     Name    = "Self Heal",
     Default = false,
     Callback = function(v)
@@ -1891,9 +1897,10 @@ TabExtras:AddToggle({
 -- =========================================================
 -- TAB: GENERATOR
 -- =========================================================
-TabGen:AddSection({ Name = "Generator Logic" })
+local _s_TabGen_8 = TabGen:Section({ Side = "Left" })
+_s_TabGen_8:Label({ Text = "Generator Logic" })
 
-TabGen:AddToggle({
+_s_TabGen_8:Toggle({
     Name    = "Auto Generator",
     Default = false,
     Callback = function(v)
@@ -1907,7 +1914,7 @@ TabGen:AddToggle({
     end
 })
 
-TabGen:AddDropdown({
+_s_TabGen_8:Dropdown({
     Name    = "SkillCheck Mode",
     Default = "Perfect",
     Options = {"Perfect","Neutral"},
@@ -1926,9 +1933,10 @@ TabGen:AddDropdown({
 -- =========================================================
 -- TAB: SURVIVOR
 -- =========================================================
-TabSurvivor:AddSection({ Name = "Movement Modification" })
+local _s_TabSurvivor_9 = TabSurvivor:Section({ Side = "Left" })
+_s_TabSurvivor_9:Label({ Text = "Movement Modification" })
 
-TabSurvivor:AddToggle({
+_s_TabSurvivor_9:Toggle({
     Name    = "Speed Boost",
     Default = false,
     Callback = function(v)
@@ -1936,10 +1944,10 @@ TabSurvivor:AddToggle({
     end
 })
 
-TabSurvivor:AddSlider({
+_s_TabSurvivor_9:Slider({
     Name      = "Speed Boost Power",
-    Min       = 0,
-    Max       = 150,
+    Minimum = 0,
+    Maximum = 150,
     Default   = 8,
     Increment = 1,
     ValueName = "%",
@@ -1948,33 +1956,34 @@ TabSurvivor:AddSlider({
     end
 })
 
-TabSurvivor:AddSection({ Name = "More" })
+local _s_TabSurvivor_10 = TabSurvivor:Section({ Side = "Left" })
+_s_TabSurvivor_10:Label({ Text = "More" })
 
-TabSurvivor:AddToggle({
+_s_TabSurvivor_10:Toggle({
     Name    = "Silent Actions (Anti-Noise)",
     Default = false,
     Callback = function(v) SilentActions = v end
 })
 
-TabSurvivor:AddToggle({
+_s_TabSurvivor_10:Toggle({
     Name    = "Anti Fall Slow",
     Default = false,
     Callback = function(v) AntiFallDamage = v end
 })
 
-TabSurvivor:AddToggle({
+_s_TabSurvivor_10:Toggle({
     Name    = "Anti Aura (No Detect)",
     Default = false,
     Callback = function(v) getgenv().AntiAura = v end
 })
 
-TabSurvivor:AddToggle({
+_s_TabSurvivor_10:Toggle({
     Name    = "Notify Killer Stun",
     Default = false,
     Callback = function(v) NotifyStun = v end
 })
 
-TabSurvivor:AddButton({
+_s_TabSurvivor_10:Button({
     Name     = "Force Reset State (Anti-Stuck)",
     Callback = function()
         TriggerAntiStuck()
@@ -1992,33 +2001,35 @@ TabSurvivor:AddKeybind({
 -- =========================================================
 -- TAB: KILLER
 -- =========================================================
-TabKiller:AddSection({ Name = "Killer Advantages" })
+local _s_TabKiller_11 = TabKiller:Section({ Side = "Left" })
+_s_TabKiller_11:Label({ Text = "Killer Advantages" })
 
-TabKiller:AddToggle({
+_s_TabKiller_11:Toggle({
     Name    = "Double Damage Generator",
     Default = false,
     Callback = function(v) DoubleDamageGen = v end
 })
 
-TabKiller:AddButton({
+_s_TabKiller_11:Button({
     Name     = "Activate Killer Power",
     Callback = function()
         pcall(function() ReplicatedStorage.Remotes.Killers.Killer.ActivatePower:FireServer() end)
     end
 })
 
-TabKiller:AddSection({ Name = "Auto Attack" })
+local _s_TabKiller_12 = TabKiller:Section({ Side = "Left" })
+_s_TabKiller_12:Label({ Text = "Auto Attack" })
 
-TabKiller:AddToggle({
+_s_TabKiller_12:Toggle({
     Name    = "Enable Auto Attack",
     Default = false,
     Callback = function(v) AutoAttack = v end
 })
 
-TabKiller:AddSlider({
+_s_TabKiller_12:Slider({
     Name      = "Attack Range (Studs)",
-    Min       = 5,
-    Max       = 25,
+    Minimum = 5,
+    Maximum = 25,
     Default   = 10,
     Increment = 1,
     ValueName = " studs",
@@ -2030,9 +2041,10 @@ TabKiller:AddSlider({
 -- =========================================================
 -- TAB: COMBAT
 -- =========================================================
-TabCombat:AddSection({ Name = "Targeting System" })
+local _s_TabCombat_13 = TabCombat:Section({ Side = "Left" })
+_s_TabCombat_13:Label({ Text = "Targeting System" })
 
-TabCombat:AddToggle({
+_s_TabCombat_13:Toggle({
     Name    = "Aimbot",
     Default = false,
     Callback = function(v)
@@ -2041,7 +2053,7 @@ TabCombat:AddToggle({
     end
 })
 
-TabCombat:AddDropdown({
+_s_TabCombat_13:Dropdown({
     Name    = "Aimbot Target",
     Default = "Torso",
     Options = {"Head","Torso","Body (RootPart)"},
@@ -2050,7 +2062,7 @@ TabCombat:AddDropdown({
     end
 })
 
-TabCombat:AddDropdown({
+_s_TabCombat_13:Dropdown({
     Name    = "Aimbot Trigger",
     Default = "Hold to Lock",
     Options = {"Hold to Lock","Auto Lock (Always)"},
@@ -2059,10 +2071,10 @@ TabCombat:AddDropdown({
     end
 })
 
-TabCombat:AddSlider({
+_s_TabCombat_13:Slider({
     Name      = "Aim Radius",
-    Min       = 30,
-    Max       = 150,
+    Minimum = 30,
+    Maximum = 150,
     Default   = 55,
     Increment = 5,
     ValueName = "px",
@@ -2074,7 +2086,7 @@ TabCombat:AddSlider({
     end
 })
 
-TabCombat:AddToggle({
+_s_TabCombat_13:Toggle({
     Name    = "Show Aim Radius",
     Default = false,
     Callback = function(v)
@@ -2083,9 +2095,10 @@ TabCombat:AddToggle({
     end
 })
 
-TabCombat:AddSection({ Name = "Killer Hitbox Modification" })
+local _s_TabCombat_14 = TabCombat:Section({ Side = "Left" })
+_s_TabCombat_14:Label({ Text = "Killer Hitbox Modification" })
 
-TabCombat:AddToggle({
+_s_TabCombat_14:Toggle({
     Name    = "Killer Hitbox",
     Default = false,
     Callback = function(v)
@@ -2101,10 +2114,10 @@ TabCombat:AddToggle({
     end
 })
 
-TabCombat:AddSlider({
+_s_TabCombat_14:Slider({
     Name      = "Hitbox Size",
-    Min       = 2,
-    Max       = 50,
+    Minimum = 2,
+    Maximum = 50,
     Default   = 15,
     Increment = 1,
     ValueName = " studs",
@@ -2116,18 +2129,19 @@ TabCombat:AddSlider({
 -- =========================================================
 -- TAB: VISUALS
 -- =========================================================
-TabVisuals:AddSection({ Name = "Camera Settings" })
+local _s_TabVisuals_15 = TabVisuals:Section({ Side = "Left" })
+_s_TabVisuals_15:Label({ Text = "Camera Settings" })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_15:Toggle({
     Name    = "Custom FOV",
     Default = false,
     Callback = function(v) CustomCameraFOV = v end
 })
 
-TabVisuals:AddSlider({
+_s_TabVisuals_15:Slider({
     Name      = "Field Of View",
-    Min       = 70,
-    Max       = 120,
+    Minimum = 70,
+    Maximum = 120,
     Default   = 100,
     Increment = 1,
     ValueName = "°",
@@ -2136,7 +2150,7 @@ TabVisuals:AddSlider({
     end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_15:Toggle({
     Name    = "FPP / TPP Mode",
     Default = false,
     Callback = function(v)
@@ -2158,9 +2172,10 @@ TabVisuals:AddToggle({
     end
 })
 
-TabVisuals:AddSection({ Name = "Crosshair Settings" })
+local _s_TabVisuals_16 = TabVisuals:Section({ Side = "Left" })
+_s_TabVisuals_16:Label({ Text = "Crosshair Settings" })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_16:Toggle({
     Name    = "Crosshair",
     Default = false,
     Callback = function(v)
@@ -2169,7 +2184,7 @@ TabVisuals:AddToggle({
     end
 })
 
-TabVisuals:AddDropdown({
+_s_TabVisuals_16:Dropdown({
     Name    = "Crosshair Style",
     Default = "Dot",
     Options = {"Dot","Scope","Circle","Plus","Cross"},
@@ -2181,10 +2196,10 @@ TabVisuals:AddDropdown({
     end
 })
 
-TabVisuals:AddSlider({
+_s_TabVisuals_16:Slider({
     Name      = "Crosshair Size",
-    Min       = 10,
-    Max       = 80,
+    Minimum = 10,
+    Maximum = 80,
     Default   = 28,
     Increment = 1,
     ValueName = "px",
@@ -2197,67 +2212,70 @@ TabVisuals:AddSlider({
     end
 })
 
-TabVisuals:AddSection({ Name = "Player & Entity Visuals" })
+local _s_TabVisuals_17 = TabVisuals:Section({ Side = "Left" })
+_s_TabVisuals_17:Label({ Text = "Player & Entity Visuals" })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_17:Toggle({
     Name    = "ESP Survivor (Name)",
     Default = false,
     Callback = function(v) ESP_Survivor_Name = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_17:Toggle({
     Name    = "ESP Survivor (Highlight)",
     Default = false,
     Callback = function(v) ESP_Survivor_Highlight = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_17:Toggle({
     Name    = "ESP Killer (Name)",
     Default = false,
     Callback = function(v) ESP_Killer_Name = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_17:Toggle({
     Name    = "ESP Killer (Highlight)",
     Default = false,
     Callback = function(v) ESP_Killer_Highlight = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_17:Toggle({
     Name    = "ESP SCP/Zombie",
     Default = false,
     Callback = function(v) ESP_SCP = v end
 })
 
-TabVisuals:AddSection({ Name = "Object Visuals" })
+local _s_TabVisuals_18 = TabVisuals:Section({ Side = "Left" })
+_s_TabVisuals_18:Label({ Text = "Object Visuals" })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_18:Toggle({
     Name    = "ESP Generator",
     Default = false,
     Callback = function(v) ESP_Generator = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_18:Toggle({
     Name    = "ESP Pallet",
     Default = false,
     Callback = function(v) ESP_Pallet = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_18:Toggle({
     Name    = "ESP Exit Gate",
     Default = false,
     Callback = function(v) ESP_Gate = v; RefreshESP() end
 })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_18:Toggle({
     Name    = "ESP Hook",
     Default = false,
     Callback = function(v) ESP_Hook = v; RefreshESP() end
 })
 
-TabVisuals:AddSection({ Name = "World Optimization" })
+local _s_TabVisuals_19 = TabVisuals:Section({ Side = "Left" })
+_s_TabVisuals_19:Label({ Text = "World Optimization" })
 
-TabVisuals:AddToggle({
+_s_TabVisuals_19:Toggle({
     Name    = "Remove All Visual Effects",
     Default = false,
     Callback = function(v)
@@ -2313,7 +2331,7 @@ TabVisuals:AddToggle({
     end
 })
 
-TabVisuals:AddButton({
+_s_TabVisuals_19:Button({
     Name     = "Force Fullbright",
     Callback = function()
         Lighting.Ambient = Color3.fromRGB(170, 170, 170)
@@ -2335,7 +2353,7 @@ TabVisuals:AddButton({
     end
 })
 
-TabVisuals:AddButton({
+_s_TabVisuals_19:Button({
     Name     = "Potato Mode",
     Callback = function()
         WindUI:Notify({ Title = "Potato Mode", Content = "Mengoptimalkan map... jangan tutup game!" })
@@ -2387,36 +2405,37 @@ TabVisuals:AddButton({
 -- =========================================================
 -- TAB: SPOOFING
 -- =========================================================
-TabSpoof:AddSection({ Name = "Client-Sided (Visual Only)" })
+local _s_TabSpoof_20 = TabSpoof:Section({ Side = "Left" })
+_s_TabSpoof_20:Label({ Text = "Client-Sided (Visual Only)" })
 
-TabSpoof:AddInput({
+_s_TabSpoof_20:Input({
     Name        = "Custom Gears",
-    Default     = "",
-    NumbersOnly = true,
+    Placeholder = "",
+    AcceptedCharacters = "Numeric",
     Callback    = function(text)
         SpoofData.Gears = tonumber(text) or 0
     end
 })
 
-TabSpoof:AddInput({
+_s_TabSpoof_20:Input({
     Name        = "Custom Screws",
-    Default     = "",
-    NumbersOnly = true,
+    Placeholder = "",
+    AcceptedCharacters = "Numeric",
     Callback    = function(text)
         SpoofData.Screws = tonumber(text) or 0
     end
 })
 
-TabSpoof:AddInput({
+_s_TabSpoof_20:Input({
     Name        = "Custom Level",
-    Default     = "",
-    NumbersOnly = true,
+    Placeholder = "",
+    AcceptedCharacters = "Numeric",
     Callback    = function(text)
         SpoofData.Level = tonumber(text) or 0
     end
 })
 
-TabSpoof:AddButton({
+_s_TabSpoof_20:Button({
     Name     = "Apply Spoof Data",
     Callback = function()
         local p = game.Players.LocalPlayer
@@ -2466,17 +2485,19 @@ TabSpoof:AddButton({
 -- =========================================================
 -- TAB: SETTINGS
 -- =========================================================
-TabSettings:AddSection({ Name = "Security & Protection" })
+local _s_TabSettings_21 = TabSettings:Section({ Side = "Left" })
+_s_TabSettings_21:Label({ Text = "Security & Protection" })
 
-TabSettings:AddToggle({
+_s_TabSettings_21:Toggle({
     Name    = "Anti-Logger (Bypass Anti-Cheat)",
     Default = true,
     Callback = function(v) AntiLogger = v end
 })
 
-TabSettings:AddSection({ Name = "Actions" })
+local _s_TabSettings_22 = TabSettings:Section({ Side = "Left" })
+_s_TabSettings_22:Label({ Text = "Actions" })
 
-TabSettings:AddButton({
+_s_TabSettings_22:Button({
     Name     = "Unload RYEENZY | HUB",
     Callback = function()
         getgenv().RYEENZY_RUNNING = false
@@ -3050,7 +3071,7 @@ task.spawn(function()
                 if actionState ~= "Idle" then
                     WindUI:Notify({
                         Title   = "AI State: " .. string.upper(actionState),
-                        Content = "Mengalihkan rute ke: " .. actionState,
+                        Description = "Mengalihkan rute ke: " .. actionState,
                     })
                 end
             end
@@ -3186,8 +3207,8 @@ end))
 -- =========================================================
 WindUI:Notify({
     Title   = "Welcome to RYEENZY | HUB!",
-    Content = "Script siap! Tekan tombol [K] untuk buka/tutup UI.",
-    Duration = 8,
+    Description = "Script siap! Tekan tombol [K] untuk buka/tutup UI.",
+    Lifetime = 8,
 })
 
 print("[RYEENZY | HUB] MacLib Loaded — 6767")
