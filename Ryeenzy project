@@ -1,1 +1,4 @@
-loadstring(game:HttpGet("https://www.rynzydevs.my.id/s/freecam-791isal"))()
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+player:Kick("For this version of the script, it has been deleted. Get the latest script on the website. https://www.rynzydevs.my.id/")
